@@ -17,4 +17,7 @@ results/
 .Rhistory
 .RData
 .Rproj.user/
+.RDataTmp*
 
+# Ignore large pdf file
+*.pdf
