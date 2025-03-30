@@ -1,5 +1,5 @@
-# Ignore data folder
-data/
+# Ignore files inisde data folder
+data/*
 
 # Ignore large Seurat objects
 *.rds
@@ -10,8 +10,8 @@ data/
 *.tmp
 *.bak
 
-# Ignore results folder (optional, if you want clean repo)
-results/
+# Ignore files inside the results folder (optional, if you want clean repo)
+results/*
 
 # R session files
 .Rhistory
