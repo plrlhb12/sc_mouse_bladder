@@ -1,0 +1,30 @@
+####################################### before20230911
+
+####################################### performed sct and annotate for indiviual project (38 in total) in 2023Aug using all individual h5 file
+refer to cellranger_record.sh
+
+Note that: 
+# 29Aug2023 found 10 h5 files from pool789 look suspicious (some files' sizes are very small; some of them were revealed to haven't been updated with the output generated on 
+sars-gene-incorportaed barcode file)
+# recopy the 10 h5 from original cellranger output folder in Sep6 2023, but accidently deleted all h5 in the origianl folder
+# copy the original barcode files to Biowulf so that I can regenerate h5 file in the future (didn't copy the 2 from pool9, didn't recall why; in my impression, the h5 of them didn't give any trouble before)
+
+####################################### 20230911-12
+For the allvirus object:
+integrate from all individual rds which has been SCT and annotated before
+
+starting from RNA assay
+folowing Seurat's integration for large dataset cPCA instead of cca
+re-annotate using integrated assay
+however, didn't peform cluster (error out)
+
+# issues encounterd during seuarat 20230831
+# cann't perform clustering for the integrated object 
+# allocating vector of size 230.2
+# Error: vector memory exhausted (limit reached?)
+#Error in unlist(object) :
+#long vectors not supported yet: ../../src/include/Rinlinedfuns.h:537
+
+########################################## 20240124: problem in integrate allctrl to allvius due to error in valid object in DimReduct
+
+##########################################

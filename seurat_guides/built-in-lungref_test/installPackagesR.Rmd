@@ -1,0 +1,59 @@
+---
+title: "Untitled"
+output: html_document
+date: "2023-05-01"
+---
+
+## Sometimes have problem with installing packages, they are many ways to install packages
+# here is an example for install seurat-data
+# although it is finally installed successfuly. The accessing to lungref still failed
+
+# not working
+```{r}
+install.packages(seurat-data) # not work
+install.packages("https://api.github.com/repos/satijalab/seurat-data/tarball/seurat5") # not work
+```
+
+# not working; installing from git repo
+```{r}
+install_github("satijalab/seurat-data") # not work
+remotes::install_github("satijalab/seurat-data", "seurat5") # not work
+devtools::install_github('satijalab/seurat-data') # not work
+```
+
+# not working
+```{r solution 1}
+library(httr)
+url <- "https://github.com/satijalab/seurat-data/archive/refs/heads/master.zip"
+temp <- tempfile()
+GET(url, write_disk(temp))
+install.packages(temp, repos = NULL, type="source")
+```
+
+## If the above doesn't work, 
+Go to the SeuratData GitHub repository at https://github.com/satijalab/seurat-data
+Click on the green "Code" button and select "Download ZIP"
+Unzip the downloaded file to a local directory
+Install the package from the local directory:
+unzip it
+
+## works for me now aftering download the seurat-data-master folder
+```{r}
+#install.packages("/path/to/local/directory/seurat-data-master", repos = NULL, type="source")
+install.packages("seurat-data-master", repos = NULL, type="source")
+library(SeuratData)
+```
+
+# however, still not able to find lungref data
+```{r}
+# Load the lungref dataset
+data("lungref")
+# still not able to find lungref data
+```
+
+# not working
+```{r}
+# C:/Users/pengl7/AppData/Local/R/win-library/4.2/
+install.packages("lungref.SeuratData", repos = NULL, type="source") # NOT WORK
+```
+

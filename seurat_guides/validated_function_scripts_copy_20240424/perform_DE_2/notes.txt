@@ -1,0 +1,3 @@
+change the paramter of logfc.threshold and min.pct to 0 so to export all genes for downstream singnal pathway anaysis including those without significant change.
+
+Didn't filter out top and bottom 50

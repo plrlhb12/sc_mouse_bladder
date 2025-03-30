@@ -1,0 +1,209 @@
+---
+title: "examine the script of integrate_virus.Rmd which executed on 20230912"
+output: html_document
+date: "2024-01-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# contiue using the template of integrate_virus.Rmd on 20230911.
+
+# Previous experiences:
+# The integrated obj takes 20G mem, and sinteractive --mem=100g is still challenge; so increase to 240g
+# increse the max mem in .Renviron up to 200g
+
+sinteractive --mem=240g --cpus-per-task=12 --gres=lsratch:100
+cd $IRF
+source myconda
+conda active r4seurat
+module load rstudio R
+rstudio&
+
+setwd("/vf/users/pengl7/IRF/seurat/flex2023/")
+
+```{r}
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+library(Azimuth)
+library(sctransform)
+library(ggplot2)
+library(hdf5r)
+library(dplyr)
+library(tidyr)
+library(DESeq2) # if want to perform DE using this option
+library(reticulate)
+use_condaenv("/data/pengl7/conda/envs/r4seurat")
+py_config()
+# need to first create a conda env as r4seurat; conda active r4seurat; conda install leidenalg; conda install numpy pandas; start rstudio&
+leidenalg <- import("leidenalg")
+```
+# get the integrated allvirus rds
+# it took 4 mins to read input; note that R may be stucked during saving the allrivus.rds
+```{r}
+run.name <- "all_virus"
+sub.obj <- readRDS("../20230831-integrate/rds/infected_samples/allvirus2_az_splitCtrl.rds")
+print(sub.obj)
+```
+
+# 20230912 analyze days for each strain
+```{r}
+obj <- readRDS("allvirus2_az.rds")
+```
+
+##################################################################
+# this is an example to subset a data for a single strain, 
+1. then peform AVG expression by conditions such as days, sars status
+2. also count cell numbers by conditions
+
+```{r}
+Idents(obj) <- "strains.fine.level"
+sub.obj <- subset(obj, idents = "Delta")
+run.name <- "Delta"
+dir.create(run.name)
+# 1. perform AVG expression
+# first define active identity
+Idents(sub.obj) <- sub.obj$predicted.celltype
+# by days
+avg.exp <- as.data.frame(AverageExpression(sub.obj, assays = "RNA", group.by = c("days")))
+write.csv(avg.exp, file = paste0(run.name, "/", run.name, "_gene_avg_exp_by_days.csv"))
+# by sars infection
+avg.exp <- as.data.frame(AverageExpression(sub.obj, assays = "RNA", group.by = c("sars.pos")))
+write.csv(avg.exp, file = paste0(run.name, "/", run.name, "_gene_avg_exp_by_sars.csv"))
+
+# 2. calculate cell number per type
+a.table <- table(sub.obj$predicted.celltype, sub.obj$days)
+df <- data.frame(a.table)
+df <- pivot_wider(df, id_cols = Var1, names_from = Var2, values_from = Freq)
+write.csv(df, file = paste0(run.name, "/", run.name, "_cell_numbers_per_type.csv"), row.names = FALSE)
+```
+
+3.also perform DE between groups, here between days
+
+```{r}
+# if just comare two groups for one condition
+compare <- "D3vsD7andD10"
+markers <- FindMarkers(sub.obj, ident.1 = "D03")
+write.csv(markers, file = paste0(run.name, "/", run.name,"_", compare,"_DE_genes.csv"))
+  
+top50 <- markers %>%
+  slice_max(n = 50, order_by = avg_log2FC)
+write.csv(top50, file = paste0(run.name, "/", run.name, "_", compare,"_top20_genes.csv"))
+  
+bottom50 <- markers %>%
+  slice_min(n = 50, order_by = avg_log2FC)
+write.csv(bottom50, file = paste0(run.name, "/", run.name,"_", compare,"_bottom20_genes.csv"))
+```
+
+```{r}
+# if comare multiple groups for one condition
+days <- c("D03", "D07", "D10")
+Idents(sub.obj) <- sub.obj$days
+# Assuming you have a list of 7 objects named 'compare.list'
+compare.list <- days
+num_objects <- length(compare.list)
+
+# Loop through each pair of objects and apply your comparison function
+for (i in 1:(num_objects - 1)) {
+  for (j in (i + 1):num_objects) {
+    # Skip self-comparisons
+    if (i != j) {
+      compare <- paste0(compare.list[[i]], "vs", compare.list[[j]])
+      ident1 = compare.list[[i]]
+      ident2 = compare.list[[j]]
+      markers <- FindMarkers(sub.obj, ident.1 = ident1, ident.2 = ident2)
+      write.csv(markers, file = paste0(run.name, "/", run.name,"_", compare,"_marker_genes.csv"))
+  
+      top50 <- markers %>%
+        slice_max(n = 50, order_by = avg_log2FC)
+      write.csv(top50, file = paste0(run.name, "/", run.name, "_", compare,"_top50_genes.csv"))
+      
+      bottom50 <- markers %>%
+        slice_min(n = 50, order_by = avg_log2FC)
+      write.csv(bottom50, file = paste0(run.name, "/", run.name,"_", compare,"_bottom50_genes.csv"))
+    }
+  }
+}
+
+```
+
+#######################################################
+The above is for finding AVG expression, count cell count, and DE on 1 conditons; if want to execute AVG expresion, cell count, and DE on different conditions such as different starin 
+using below scripts
+#######################################################
+
+```{r}
+#strains <- levels(factor(obj$strains.fine.level)) 
+strains <- c("Omicron_BA.2","WA01") 
+
+# loop each strain
+
+for (strain in strains){
+Idents(obj) <- "strains.fine.level"
+sub.obj <- subset(obj, idents = strain)
+run.name <- strain
+dir.create(run.name)
+#perform AVG expression using SCT data
+Idents(sub.obj) <- sub.obj$predicted.celltype
+avg.exp <- as.data.frame(AverageExpression(sub.obj, assays = "RNA", group.by = c("days")))
+write.csv(avg.exp, file = paste0(run.name, "/", run.name, "_gene_avg_exp_by_days.csv"))
+avg.exp <- as.data.frame(AverageExpression(sub.obj, assays = "RNA", group.by = c("sars.pos")))
+write.csv(avg.exp, file = paste0(run.name, "/", run.name, "_gene_avg_exp_by_sars.csv"))
+
+# calculate cell number per type
+a.table <- table(sub.obj$predicted.celltype, sub.obj$days)
+df <- data.frame(a.table)
+df <- pivot_wider(df, id_cols = Var1, names_from = Var2, values_from = Freq)
+write.csv(df, file = paste0(run.name, "/", run.name, "_cell_numbers_per_type.csv"), row.names = FALSE)
+
+# plot
+DefaultAssay(sub.obj) <- "integrated"
+p2 <- DimPlot(sub.obj, group.by = "predicted.celltype", split.by = "days")
+ggsave(filename = paste0(run.name, "/", run.name, ".pdf"), width = 16)
+
+# DE genes: 
+# using for loop to compare D3vsD7, D3vsD10, D7vsD10
+
+days <- c("D03", "D07", "D10")
+Idents(sub.obj) <- sub.obj$days
+# Assuming you have a list of 7 objects named 'compare.list'
+compare.list <- days
+num_objects <- length(compare.list)
+
+for (i in 1:(num_objects - 1)) {
+  for (j in (i + 1):num_objects) {
+    # Skip self-comparisons
+    if (i != j) {
+      compare <- paste0(compare.list[[i]], "vs", compare.list[[j]])
+      ident1 = compare.list[[i]]
+      ident2 = compare.list[[j]]
+      markers <- FindMarkers(sub.obj, ident.1 = ident1, ident.2 = ident2)
+      write.csv(markers, file = paste0(run.name, "/", run.name,"_", compare,"_DE_genes.csv"))
+  
+      top50 <- markers %>%
+        slice_max(n = 50, order_by = avg_log2FC)
+      write.csv(top50, file = paste0(run.name, "/", run.name, "_", compare,"_top50_genes.csv"))
+      
+      bottom50 <- markers %>%
+        slice_min(n = 50, order_by = avg_log2FC)
+      write.csv(bottom50, file = paste0(run.name, "/", run.name,"_", compare,"_bottom50_genes.csv"))
+    }
+  }
+}
+
+# compare D3 to the left (D7+D10)
+compare <- "D3vsD7andD10"
+markers <- FindMarkers(sub.obj, ident.1 = "D03")
+write.csv(markers, file = paste0(run.name, "/", run.name,"_", compare,"_DE_genes.csv"))
+  
+top50 <- markers %>%
+  slice_max(n = 50, order_by = avg_log2FC)
+write.csv(top50, file = paste0(run.name, "/", run.name, "_", compare,"_top20_genes.csv"))
+  
+bottom50 <- markers %>%
+  slice_min(n = 50, order_by = avg_log2FC)
+write.csv(bottom50, file = paste0(run.name, "/", run.name,"_", compare,"_bottom20_genes.csv"))
+}
+```

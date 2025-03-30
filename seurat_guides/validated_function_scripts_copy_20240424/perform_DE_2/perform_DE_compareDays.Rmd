@@ -1,0 +1,117 @@
+---
+title: "Untitled"
+output: html_document
+date: "2024-01-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Tips in DE
+1. Make sure set the active assy is RNA
+2. make sure reset active.idents before execution
+
+# CASE 1: peform DE by comparing days on the whole dataset or one of its subset
+```{r}
+# DE genes
+days <- c("D03", "D07", "D10")
+# makesure use RNA assay instead of integrated which may be the default
+DefaultAssay(allvirus) <- "RNA"
+# need to change active identities
+Idents(allvirus) <- allvirus$days
+# Assuming you have a list of objects named 'compare.list' to be compared
+compare.list <- days
+num_objects <- length(compare.list)
+
+# 1 to 1 compare by looping through each pair of objects and apply your comparison function
+for (i in 1:(num_objects - 1)) {
+  for (j in (i + 1):num_objects) {
+    # Skip self-comparisons
+    if (i != j) {
+      compare <- paste0(compare.list[[i]], "_vs_", compare.list[[j]])
+      ident1 = compare.list[[i]]
+      ident2 = compare.list[[j]]
+      markers <- FindMarkers(allvirus, ident.1 = ident1, ident.2 = ident2)
+      write.csv(markers, file = paste0("outputs/", run.name, "/", run.name,"_", compare,"_DE_genes.csv"))
+  
+      top50 <- markers %>%
+        slice_max(n = 50, order_by = avg_log2FC)
+      write.csv(top50, file = paste0(run.name, "/", run.name, "_", compare,"_top50_genes.csv"))
+      
+      bottom50 <- markers %>%
+        slice_min(n = 50, order_by = avg_log2FC)
+      write.csv(bottom50, file = paste0(run.name, "/", run.name,"_", compare,"_bottom50_genes.csv"))
+    }
+  }
+}
+
+# compare D3 to the left (D7 + D10)
+compare <- "D3vsD7andD10"
+markers <- FindMarkers(sub.obj, ident.1 = "D03")
+write.csv(markers, file = paste0("outputs/", run.name, "/", run.name,"_", compare,"_DE_genes.csv"))
+  
+top50 <- markers %>%
+  slice_max(n = 50, order_by = avg_log2FC)
+write.csv(top50, file = paste0("outputs/", run.name, "/", run.name, "_", compare,"_top50_genes.csv"))
+  
+bottom50 <- markers %>%
+  slice_min(n = 50, order_by = avg_log2FC)
+write.csv(bottom50, file = paste0(run.name, "/", run.name,"_", compare,"_bottom50_genes.csv"))
+
+```
+
+# CASE 2: peform DE by comparing days among among different cell types
+
+## using For loop for different cell types
+```{r}
+cell.types <- levels(factor(allvirus$cell.type)) 
+days <- c("D03", "D07", "D10")
+DefaultAssay(wholedata) <- "RNA"
+Idents(allvirus) <- "cell.type" 
+
+for (type in cell.types){
+  sub.obj <- subset(allvirus, idents = type)
+  run.name <- type
+  dir.create(paste0("outputs/",run.name))
+  Idents(sub.obj) <- sub.obj$days
+  # Assuming you have a list of 7 objects named 'compare.list'
+  compare.list <- days
+  num_objects <- length(compare.list)
+  
+  # Loop through each pair of objects and apply your comparison function
+  for (i in 1:(num_objects - 1)) {
+    for (j in (i + 1):num_objects) {
+      # Skip self-comparisons
+      if (i != j) {
+        compare <- paste0(compare.list[[i]], "_vs_", compare.list[[j]])
+        ident1 = compare.list[[i]]
+        ident2 = compare.list[[j]]
+        markers <- FindMarkers(sub.obj, ident.1 = ident1, ident.2 = ident2)
+        write.csv(markers, file = paste0("outputs/", run.name, "/", run.name,"_", compare,"_DE_genes.csv"))
+        
+        top50 <- markers %>%
+          slice_max(n = 50, order_by = avg_log2FC)
+        write.csv(top50, file = paste0("outputs/", run.name, "/", run.name, "_", compare,"_top50_genes.csv"))
+        
+        bottom50 <- markers %>%
+          slice_min(n = 50, order_by = avg_log2FC)
+        write.csv(bottom50, file = paste0("outputs/", run.name, "/", run.name,"_", compare,"_bottom50_genes.csv"))
+      }
+    }
+  }
+  
+  # continue to compare D3 to the others
+  compare <- "D3vsD7andD10"
+  markers <- FindMarkers(sub.obj, ident.1 = "D03")
+  write.csv(markers, file = paste0("outputs/", run.name, "/", run.name,"_", compare,"_DE_genes.csv"))
+  
+  top50 <- markers %>%
+    slice_max(n = 50, order_by = avg_log2FC)
+  write.csv(top50, file = paste0("outputs/", run.name, "/", run.name, "_", compare,"_top50_genes.csv"))
+  
+  bottom50 <- markers %>%
+    slice_min(n = 50, order_by = avg_log2FC)
+  write.csv(bottom50, file = paste0("outputs/", run.name, "/", run.name,"_", compare,"_bottom50_genes.csv"))
+}
+```

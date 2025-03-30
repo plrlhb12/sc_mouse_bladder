@@ -1,0 +1,3 @@
+need to update the h5 files or the whole pool 7,8m9 in Cellranger folder 2Feb2024  to locus. (This might have been done)
+
+copy the new DEG folder which contain whole lists of genes from 20240224 folder to Skyline as of 20240823

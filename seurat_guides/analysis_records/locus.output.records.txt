@@ -1,0 +1,30 @@
+######################################################
+############ On locus
+######################################################
+############ For original cellranger outputs
+20230629_FLEX: pool1 to pool 6
+20230725_Flex: pool1 to pool 10; this set should be the right set which have been analyzed with the probles containing sars-cov2 probles and also with intact h5 files
+
+############ old and already deleted for files generated before 20230830: Folder of "Todelte/individuals", "4J", "4J-Omicron-D3", "Epsilon"
+For all the analysis before 2023-08-29 2:00 pm, the data from pool 7 and 8 , i.e., 4 samples of 4J, 4 samples of 4M (3 ctrl + Omicron-D3) didn't included SARS-genes, although the host also
+has ORF1ab expression.
+
+individuals: use louven, didn't update the 8 samples
+
+############ 20230906
+h5-badgenerated or h5-questionable were the h5 files moved from loucs pool 7, 8, and 9; for whatever reasons, these files were only partial or wrong; I have deleted them in Locus 20230725/pool7/8/9/nextseq2/per_sample_outs/../count/; I used their count folder for analysis instead. Therefore, no sample_filtered_feature_bc_matrix.h5 available for these 3 pools; however, their count folder still exist in W:\secondary_analysis\FLEX\20230725_FLEX\pool10\nextseq2\per_sample_outs\065E-4D-Omicron-D3\count\sample_filtered_feature_bc_matrix/.
+
+############ 20230906
+individuals-2: use leiden, updated the 8 samples
+
+############
+# it seems that the sink() function may cause my Rstudio didn't print output (my guess)
+
+############ continue sc analysis using Seurat on Jan 18th 2024
+333333333333 generated outputs on 20240124
+
+############ 20240125
+generated all 10 new h5files in biowulf and transfered them into locus original folder
+
+
+

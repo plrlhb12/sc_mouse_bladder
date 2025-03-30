@@ -1,0 +1,88 @@
+---
+title: "LP"
+output: html_document
+date: "2023-09-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# This is done on local windows accessing HPC datasets 
+
+```{r}
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+library(ggplot2)
+library(hdf5r)
+```
+
+
+- the current wd is "Y:/IRF/Cellranger/"
+
+
+```{r}
+combined <- readRDS("rds/epsilon_sct_az_hst.rds")
+combined
+```
+
+# only test on D3 which has the most infection of Sars
+
+```{r}
+Idents(combined) <- combined$orig.ident
+d3 <- subset(combined, idents = "D3")
+Idents(d3) <- d3$seurat_clusters
+d3
+```
+
+# using AverageExpression() function to calculate average expression for each cluster
+# by default, all the applicable assays inside D3, e.g., RNA, refAssay, integrated, and etc., will do perform the function 
+# according to the active idents, and return a matrix for each assay
+# the default slot is "data", i.e., log transformed and normalized data
+# ideal should be the one from "RNA" assay; do not use "integrated" for expression analysis
+# will also generate a table for the prediction.score for each cell types across each cell clusters
+
+# IF only want to chose "RNA" assay, define it inside the funciton of AverageExpression(d3, assay = "RNA", data = "count")
+```{r}
+# Calculate average expression for each cluster
+# here default groups by "ident" on all 6 assays; the returned is a list of matrixes
+average_expression <- AverageExpression(d3)
+# Save the results to a data frame
+for (assay_id in names(average_expression)) {
+  cluster_average_expression <- as.data.frame(average_expression[[assay_id]])
+  write.csv(cluster_average_expression, file = paste0("d3_epsilon_cluster_", assay_id, "_average_expression.csv"), row.names = TRUE)
+}
+```
+
+# repeat the above but using slot = "counts")
+```{r}
+# also generate the pseudo count matrix for DE analysis
+average_expression <- AverageExpression(d3, slot = "counts")
+for (assay_id in names(average_expression)) {
+  cluster_average_expression <- as.data.frame(average_expression[[assay_id]])
+  write.csv(cluster_average_expression, file = paste0("d3_epsilon_cluster_", assay_id, "_average_counts.csv"), row.names = TRUE)
+}
+```
+
+# perform DE on psudo bulk data
+# Not work, returned an empty dataframe
+```{r}
+# get the count data from "RNA" assay
+average_expression <- AverageExpression(d3, slot = "counts", assays = "RNA")
+average_counts <- as.data.frame(average_expression[["RNA"]])
+# Create a Seurat object with pseudobulk data
+pseudobulk <- CreateSeuratObject(counts = average_counts)
+# Assuming colnames(average_expression) are cluster names
+pseudobulk$seurat_clusters <- colnames(average_counts)
+# Perform differential expression analysis
+de_results <- FindAllMarkers(pseudobulk, test.use = "wilcox")
+# fail reason: I have no duplicated for each cluster???
+de_results #data frame with 0 columns and 0 rows; Warning: No DE genes identified;
+```
+
+```{r}
+# Filter results
+significant_genes <- de_results[de_results$p_val_adj < 0.05 & abs(de_results$log2fc) > 1, ]
+
+```

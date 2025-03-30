@@ -1,0 +1,173 @@
+---
+title: "annotation using customized reference dataset"
+output: html_document
+date: "2023-08-02"
+---
+
+https://github.com/satijalab/azimuth/issues/21
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+getwd()
+```
+```{r}
+library(Seurat)
+library(Azimuth)
+library(sctransform)
+library(ggplot2)
+library(patchwork)
+```
+
+# read the reference dataset containing cell type info
+
+This was downloaded from the group in Germany in the paper of Temperail sars transcriptomics in Nature Communications
+https://www.nature.com/articles/s41467-021-25030-7
+
+It has both curated annotation as "celltype" as well as annoation using tabula_muris as "predited.id.tabula_muris"
+Apparently, the celltypes from these two methods are quit different
+
+```{r}
+ref <- readRDS("ma_int.rds")
+ref
+```
+
+```{r}
+colnames(ref@meta.data)
+```
+
+```{r}
+head(ref[["celltype"]], 15)
+```
+
+```{r}
+range(ref[["SCoV2_load"]])
+```
+
+```{r}
+range(ref[["SCoV2_sum"]])
+```
+
+
+```{r}
+head(ref[["prev.cluster"]])
+```
+```{r}
+head(ref[["predicted.id.tabula_muris"]], 15)
+```
+
+# generate hamster ref
+# first downsample to 2000 
+```{r}
+ref <- subset(x = ref, downsample = 2000)
+ref
+```
+
+# can refer to the script but need some troubleshooting
+https://github.com/satijalab/azimuth-references/blob/master/human_motorcortex/scripts/export.R
+# fix errors: change meta column name, run SCTransform
+
+```{r}
+ref$cell.type.tabula_muris <- factor(ref$predicted.id.tabula_muris)
+```
+
+```{r}
+ref <- SCTransform(ref)
+ref <- RunUMAP(object = ref, reduction = "pca", dims = 1:30, return.model = TRUE)
+```
+
+```{r}
+ref <- AzimuthReference(
+  object = ref,
+  refUMAP = "umap",
+  refDR = "pca",
+  refAssay = "SCT",
+  metadata = c("celltype", "seurat_cluster", "cell.type.tabula_muris"), # by mistakes omitting s in "seurat_clusters"
+  dims = 1:50,
+  k.param = 31,
+  reference.version = "1.0.0"
+)
+```
+
+
+```{r}
+ref
+```
+
+# must need to save them into a folder, whose name will be used as the reference name of in RunAzimuth
+2 files must be inside this folder: ref.Rds and idx,annoy
+
+```{r}
+SaveAnnoyIndex(object = ref[["refdr.annoy.neighbors"]], file = file.path("hamsterLungRef/idx.annoy"))
+saveRDS(object = ref, file = file.path("hamsterLungRef/ref.Rds"))
+```
+
+
+```{r}
+colnames(ref@meta.data)
+```
+
+# read my own dataset
+```{r}
+epsilon <- readRDS("epsilon_sct.rds")
+"M" %in% rownames(epsilon)
+```
+
+# lost my Sars Genes if using default lungref ref datasets
+strange thing here: seems to only human gene name
+# annotation with default lung ref
+```{r}
+epsilon_az <- RunAzimuth(epsilon, "lungref")
+"M" %in% rownames(epsilon_az) # lost Sars genes at these step
+```
+
+# annotate using custmized ref
+```{r}
+epsilon_hamster <- RunAzimuth(epsilon, "hamsterLungRef")
+"M" %in% rownames(epsilon_hamster)
+```
+
+
+```{r}
+"M" %in% rownames(epsilon_hamster)
+```
+
+# save
+```{r}
+saveRDS(epsilon_hamster, file = "epsilon_sct_az_hst.rds")
+```
+
+
+```{r}
+names(epsilon_hamster)
+```
+```{r}
+colnames(epsilon_hamster@meta.data)
+```
+
+# plot sars and cell types
+```{r}
+sars_genes <- c("S", "M", "N", "ORF1ab", "ORF8")
+p1 <- FeaturePlot(epsilon_hamster, features = sars_genes, ncol = 3)
+ggsave("sars_umap.pdf", p1, width = 8, height = 6)
+
+p <- DimPlot(epsilon_hamster, group.by = "seurat_clusters")
+ggsave("clusters.pdf", p)
+
+p <- DimPlot(epsilon_hamster, group.by = "predicted.celltype")
+ggsave("annotation_hamster.pdf", p)
+```
+
+```{r}
+p <- DimPlot(epsilon_hamster, group.by = "predicted.cell.type.tabula_muris")
+ggsave("new_annotations_muris.pdf", p, width = 10, height = 6)
+```
+
+```{r}
+p3 <- DimPlot(epsilon_hamster, group.by = "predicted.cell.type.tabula_muris", split.by = "orig.ident")
+p4 <- DimPlot(epsilon_hamster, group.by = "predicted.celltype", split.by = "orig.ident")
+a_plot <- p3 + p4 + plot_layout(nrow = 2)
+ggsave("annotations_split_days.pdf", a_plot, width = 16, height = 12)
+```

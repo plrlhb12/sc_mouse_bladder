@@ -1,0 +1,55 @@
+---
+title: "LP"
+output: html_document
+date: "2023-07-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# INPUT the obj from biowulf 
+```{r}
+getwd()
+```
+
+
+```{r}
+combined <- readRDS("../flex2023/epsilon_sct_az.rds")
+```
+
+# generate tables
+```{r}
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+#library(Azimuth)
+#library(sctransform)
+library(ggplot2)
+library(hdf5r)
+library(dplyr)
+```
+
+
+```{r}
+combined <- readRDS("epsilon_sct_az_hst.rds")
+combined
+```
+
+```{r}
+colnames(combined@meta.data)
+```
+
+```{r}
+colnames(combined@meta.data)[c(7,12,14)]
+```
+
+
+```{r}
+for (i in colnames(combined@meta.data)[c(7,12,14)]){
+  print(i)
+  cell_type_counts <- table(combined$orig.ident, combined@meta.data[[i]])
+  write.csv(cell_type_counts, file = paste0("cell_type_count", i, ".csv"))
+}
+
+```

@@ -1,0 +1,215 @@
+---
+title: "LP"
+output:
+  pdf_document: default
+  html_document: default
+date: "2023-08-23, 20240210"
+---
+
+# try to repeat individuals from beggining by repeating 20240210-repeatIndividual.Rmd, colton's guide, and 20240212_integrateAll.Rmdusing new h5 generated on 20240202
+
+Problem: couldn't RunAzimuth after integration due to layers
+
+```{r}
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+library(Azimuth)
+library(sctransform)
+library(ggplot2)
+library(hdf5r)
+library(dplyr)
+library(reticulate)
+library(DESeq2) # if want to perform DE using this option
+library(reticulate)
+library(BPCells)
+library(tidyverse)
+use_condaenv("/data/pengl7/conda/envs/r4seurat")
+py_config()
+# need to first create a conda env as r4seurat; conda active r4seurat; conda install leidenalg; conda install numpy pandas; start rstudio&
+leidenalg <- import("leidenalg")
+```
+
+```{r}
+sink("sesssionInfo_20240328.txt")
+sessionInfo()
+sink()
+```
+
+# file path for all samples
+
+```{r}
+h5_file_dir <- "../../raw_data/h5files"
+merged_seurat_out_path <- "results/initial_merged_seurat_object.rds"
+standard_integrated_seurat_out_path <- "results/final_integrated_seurat_object_using_full_dataset_integration.rds"
+qc_data_output_path <- "results/initial_qc_metrics.tsv"
+```
+
+```{r}
+# Get a list of all available h5 files
+files_to_read_in <- list.files(
+  path = h5_file_dir,
+  pattern = "*h5",
+  full.names = TRUE
+)
+```
+
+#Error in curl::curl_fetch_memory(url, handle = handle) : 
+  Timeout was reached: [www.ensembl.org:443] Operation timed out after 60001 milliseconds with 0 bytes received
+```{r}
+# Loop through h5 files
+data_list <- c()
+metadata <- c()
+
+for (i in 1:length(files_to_read_in)) {
+  
+  path <- files_to_read_in[i]
+  sample_name <- gsub(".h5$", "", basename(path))
+  
+  print(sample_name)
+  
+  # Write BP matrices
+  data <- open_matrix_10x_hdf5(path)
+  colnames(data) <- paste(colnames(data), sample_name, sep = "_")
+  
+  write_matrix_dir(
+    mat = data,
+    dir = paste0(gsub(".h5$", "", path), "_BP")
+  )
+  
+  # Load in BP matrices
+  mat <- open_matrix_dir(dir = paste0(gsub(".h5$", "", path), "_BP"))
+  mat <- Azimuth:::ConvertEnsembleToSymbol(mat = mat, species = "mouse")
+  
+  # Create metadata
+  temp_metadata <- data.frame(
+    BarcodeID = colnames(mat),
+    Sample = gsub(".h5$", "", basename(path))
+  ) %>%
+    mutate(
+      Strain = gsub("-D[0-9]+$", "", Sample),
+      TimePoint = str_extract(Sample, "D[0-9]+$")
+    )
+  
+  # Add counts and metadata to their lists or dataframes
+  data_list[[i]] <- mat
+  metadata <- bind_rows(
+    metadata,
+    temp_metadata
+  )
+  
+}
+# Name layers
+names(data_list) <- gsub(".h5", "", basename(files_to_read_in))
+
+# Move add rownames to metadata
+metadata <- metadata %>%
+  column_to_rownames(var = "BarcodeID")
+
+# Create merged seurat object
+merged_seurat_object <- CreateSeuratObject(counts = data_list,
+                                           meta.data = metadata)
+#Save output ###
+
+write_tsv(
+  merged_seurat_object@meta.data,
+  qc_data_output_path
+)
+
+# Save RDS object
+saveRDS(
+  object = merged_seurat_object,
+  file = merged_seurat_out_path
+)
+
+```
+
+### Pre-process raw merged Seurat Object ###
+```{r}
+# Load seurat object
+merged_seurat_object <- readRDS(merged_seurat_out_path)
+
+# Filter seurat object
+merged_seurat_object <- subset(merged_seurat_object,
+                               subset = nFeature_RNA > 300 &
+                                 nFeature_RNA < 3000)
+
+# Normalize data, find variable features, scale data, run PCA
+merged_seurat_object <- NormalizeData(merged_seurat_object)
+merged_seurat_object <- FindVariableFeatures(merged_seurat_object,
+                                             verbose = FALSE)
+merged_seurat_object <- ScaleData(merged_seurat_object)
+merged_seurat_object <- RunPCA(merged_seurat_object)
+```
+# perform sctransform and annotation
+```{r}
+# Increase default globals size to ensure we don't exceed the default
+sctransform_integrated_seurat_out_path <- "results/final_integrated_seurat_object_using_full_dataset_integration_and_sctransform.rds"
+
+# Run SCTransform and PCA
+merged_seurat_object <- SCTransform(merged_seurat_object, verbose = FALSE)
+merged_seurat_object <- RunPCA(merged_seurat_object)
+
+### Perform integration ###
+# Increase default globals size to ensure we don't exceed the default
+options(future.globals.maxSize = 24000 * 1024^2)
+integrated_seurat_object <- IntegrateLayers(
+  object = merged_seurat_object,
+  method = RPCAIntegration,
+  normalization.method = "SCT",
+  new.reduction = "integrated.rpca",
+  verbose = F
+)
+
+# Find clusters using leiden clustering
+integrated_seurat_object <- FindNeighbors(
+  object = integrated_seurat_object,
+  reduction = "integrated.rpca",
+  dims = 1:30
+)
+
+for(i in 1:length(seq(0.1, 0.5, 0.1))){
+  
+  integrated_seurat_object <- FindClusters(
+    object = integrated_seurat_object,
+    resolution = seq(0.1, 0.5, 0.1)[i], # Should explore and adjust resolution
+    algorithm = 4,
+    method = "igraph"
+  )
+  
+}
+
+integrated_seurat_object <- RunUMAP(
+  object = integrated_seurat_object,
+  reduction = "integrated.rpca",
+  reduction.name = "umap.rpca",
+  dims = 1:30, # Elbow plot confirmed this is an appropriate resolution
+  return.model = T,
+  verbose = F
+)
+
+```
+Error in indices.ba[neighbors.ab, 1:k.anchor, drop = FALSE] : 
+  subscript out of bounds
+  
+The "subscript out of bounds" error you're encountering with RunAzimuth might be due to having multiple layers in your Seurat object. A workaround suggested by a user who faced a similar issue is to use JoinLayers() or to subset each layer out as individual Seurat objects before running RunAzimuth. This approach resolved the problem for them.
+
+```{r}
+reference <- "../../hamsterLungRef" #"lungref"
+integrated_seurat_object <- JoinLayers(integrated_seurat_object)
+integrated_seurat_object <- RunAzimuth(integrated_seurat_object, reference = reference)
+
+```
+# took 1 hour to finish save and another 1 hour to release mem
+```{r}
+saveRDS(
+  object = integrated_seurat_object,
+  file = sctransform_integrated_seurat_out_path
+)
+```
+
+#JoinLayers() is not working for SCT assay after integration
+```{r}
+sctransform_integrated_seurat_out_path <- "results/final_integrated_seurat_object_using_full_dataset_integration_and_sctransform.rds"
+sctransform_integrated_seurat_object <- readRDS(sctransform_integrated_seurat_out_path)
+```

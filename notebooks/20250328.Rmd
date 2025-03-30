@@ -1,0 +1,384 @@
+---
+title: "LP"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-03-28"
+---
+
+# load required packages following 20240328_followColton.Rmd
+R --version is 4.3.2
+
+```{r}
+.libPaths()
+```
+
+```{r}
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+library(Azimuth)
+library(sctransform)
+library(ggplot2)
+library(hdf5r)
+library(dplyr)
+library(reticulate)
+library(DESeq2) # if want to perform DE using this option
+library(reticulate)
+library(BPCells)
+library(tidyverse)
+library(here)
+use_condaenv("/data/pengl7/conda/envs/r4seurat")
+py_config()
+# need to first create a conda env as r4seurat; conda active r4seurat; conda install leidenalg; conda install numpy pandas; start rstudio&
+leidenalg <- import("leidenalg")
+```
+```{r}
+find.package("Seurat")
+# "/usr/local/apps/R/4.3/site-library_4.3.2/Seurat"
+```
+
+```{r}
+DATE="20250328"
+sink(paste0("sesssionInfo_", DATE, ".txt"))
+sessionInfo()
+sink()
+```
+
+# file path for all samples
+```{r}
+library(here)
+```
+
+```{r}
+# Directory containing multiple sample folders
+h5_file_dir <- here("data")
+rds_dir <- here("results", "rds_unfiltered")
+dir.create(rds_dir, showWarnings = FALSE)
+
+# Path to save Seurat object and outputs
+merged_out_path <- here("results", "merged.rds") 
+integrated_out_path <- here( "results", "integrated.rds")
+qc_data_output_path <- here("results", "initial_qc_metrics.tsv")
+```
+
+```{r}
+# Discover sample folders inside h5_file_dir
+sample_dirs <- list.dirs(h5_file_dir, recursive = FALSE, full.names = TRUE)
+print(sample_dirs)
+sample_names <- basename(sample_dirs)
+print(sample_names)
+```
+
+```{r}
+# Initialize list to store individual Seurat objects
+seurat_list <- list()
+qc_metrics_list <- list()
+
+# Loop through samples
+for (i in seq_along(sample_dirs)) {
+  sample <- sample_names[i]
+  h5_file <- file.path(sample_dirs[i], "filtered_feature_bc_matrix.h5")
+
+  message("🔄 Reading: ", h5_file)
+  counts <- Read10X_h5(h5_file)
+  seurat_obj <- CreateSeuratObject(counts = counts, project = sample, min.cells = 3, min.features = 200)
+
+  # Annotate with metadata
+  seurat_obj$sample <- sample
+  seurat_obj[["percent.mt"]] <- PercentageFeatureSet(seurat_obj, pattern = "^mt-")  # adjust to "^MT-" for human
+
+  # Store QC info
+  qc_df <- seurat_obj@meta.data %>% mutate(cell = colnames(seurat_obj), sample = sample)
+  qc_metrics_list[[sample]] <- qc_df
+
+  # Save Seurat object as individual .rds
+  rds_path <- file.path(rds_dir, paste0(sample, "_raw.rds"))
+  saveRDS(seurat_obj, file = rds_path)
+
+  # Add to list for later merging
+  seurat_list[[sample]] <- seurat_obj
+}
+
+# Combine all QC metrics
+all_qc <- bind_rows(qc_metrics_list)
+write.table(all_qc, file = qc_output_path, sep = "\t", quote = FALSE, row.names = FALSE)
+
+# Optional: Save full unfiltered list
+# seurat_list <- readRDS("results/seurat_list_unfiltered.rds") if want to read the list
+saveRDS(seurat_list, file = here("results", "seurat_list_unfiltered.rds"))
+
+message("✅ Done! Raw Seurat objects and QC metrics saved.")
+```
+
+
+```{r}
+qc_data_output_path <- here("results", "initial_qc_metrics.tsv")
+data <- read_tsv(qc_data_output_path, show_col_types = FALSE)
+
+lower_cutoff <- quantile(data$nFeature_RNA, probs = 0.05)
+upper_cutoff <- quantile(data$nFeature_RNA, probs = 0.95)
+
+p1 <- data %>%
+  ggplot(aes(x = sample, y = nFeature_RNA)) +
+  geom_violin(fill = "red", alpha = 0.5) +
+  geom_jitter(alpha = 0.2, size = 0.2) +
+  geom_hline(yintercept = lower_cutoff, linetype = "dashed", color = "blue") +
+  geom_hline(yintercept = upper_cutoff, linetype = "dashed", color = "red") +
+  coord_flip() +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size = 16),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12)
+  ) +
+  labs(x = NULL, y = "# of Detected Genes")
+
+# Save the plot to PDF
+ggsave(
+  filename = here::here("results", "violin_nFeature.pdf"),
+  plot = p1,
+  width = 8,
+  height = 5
+)
+
+message("✅ Violin plot for percent.mt saved as 'results/violin_nFeature.pdf'")
+
+p1
+```
+
+# contiue on 20250329
+read in the list of rds
+
+```{r}
+# Load unfiltered Seurat list
+seurat_list <- readRDS(here("results", "seurat_list_unfiltered.rds"))
+```
+
+```{r}
+seurat_list
+```
+
+```{r}
+# Create the violin plot for mitochondrial percentage
+#upper_cutoff <- quantile(data$percent.mt, probs = 0.90)
+upper_cutoff <- 10
+p3 <- data %>%
+  ggplot(aes(x = sample, y = percent.mt)) +
+  geom_violin(fill = "skyblue", alpha = 0.5) +
+  geom_jitter(alpha = 0.2, size = 0.2) +
+  geom_hline(yintercept = upper_cutoff, linetype = "dashed", color = "red") +
+  coord_flip() +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size = 16),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12)
+  ) +
+  labs(
+    x = NULL,
+    y = "Mitochondrial Percentage",
+    title = "Mitochondrial Content per Sample"
+  )
+
+# Save the plot to PDF
+ggsave(
+  filename = here::here("results", "violin_percent_mt.pdf"),
+  plot = p3,
+  width = 8,
+  height = 5
+)
+
+message("✅ Violin plot for percent.mt saved as 'results/violin_percent_mt.pdf'")
+
+p3
+```
+
+
+```{r}
+# Create the violin plot for total UMI count per cell
+# Calculate dynamic thresholds
+lower_cutoff <- quantile(data$nCount_RNA, probs = 0.05)
+upper_cutoff <- quantile(data$nCount_RNA, probs = 0.95)
+
+p2 <- data %>%
+  ggplot(aes(x = sample, y = nCount_RNA)) +
+  geom_violin(fill = "forestgreen", alpha = 0.5) +
+  geom_jitter(alpha = 0.2, size = 0.2) +
+  geom_hline(yintercept = lower_cutoff, linetype = "dashed", color = "blue") +
+  geom_hline(yintercept = upper_cutoff, linetype = "dashed", color = "red") + # optional guideline
+  coord_flip() +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size = 16),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12)
+  ) +
+  labs(
+    x = NULL,
+    y = "Total UMI Counts (nCount_RNA)",
+    title = "UMI Counts per Cell per Sample"
+  )
+
+# Save the plot to PDF
+ggsave(
+  filename = here::here("results", "violin_nCount_RNA.pdf"),
+  plot = p2,
+  width = 8,
+  height = 5
+)
+
+message("✅ Violin plot for nCount_RNA saved as 'results/violin_nCount_RNA.pdf'")
+
+p2
+```
+
+Common QC thresholds:as a default starting point, especially for human PBMC or similar datasets
+subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5
+
+For mouse tissues, including solid organs (like bladder), thresholds are often adjusted higher:
+subset = nFeature_RNA > 200 & nFeature_RNA < 6000 & percent.mt < 10
+
+Most studies primarily filter on:
+nFeature_RNA
+  Low values: empty droplets or poor quality
+  High values: likely doublets or multiplets
+
+percent.mt
+  High mito % suggests damaged or apoptotic cells
+  
+Percentage of total reads that map to cells rather than background (ambient) RNA.
+59–61% is lower than the ideal
+Range (%)	Interpretation
+>80%	Excellent capture, low ambient RNA
+70–80%	Acceptable
+60–70%	Borderline — check for ambient/damaged cells
+<60%	High ambient RNA or poor capture
+So you're right — it could indicate:
+
+A large population of dying/low-RNA-content cells
+Ambient RNA (especially from lysed cells)
+Low complexity libraries
+
+```{r}
+# Define the percentiles you want
+percentiles <- c(0.01, 0.05, 0.10, 0.90, 0.95, 0.99)
+
+# Compute percentiles for each metric
+result <- tibble(
+  Percentile = paste0(percentiles * 100, "th"),
+  nFeature_RNA = quantile(data$nFeature_RNA, probs = percentiles, na.rm = TRUE),
+  nCount_RNA = quantile(data$nCount_RNA, probs = percentiles, na.rm = TRUE),
+  percent.mt = quantile(data$percent.mt, probs = percentiles, na.rm = TRUE)
+)
+
+# View the results
+print(result)
+
+# Optionally write to file
+write_tsv(result, here::here("results", "qc_percentiles.tsv"))
+```
+
+
+```{r}
+# Extract all metadata to compute percentiles
+all_meta <- bind_rows(
+  lapply(seurat_list, function(obj) {
+    obj@meta.data %>% mutate(cell = colnames(obj))
+  })
+)
+
+# Calculate dynamic thresholds
+lower_nFeature <- quantile(all_meta$nFeature_RNA, 0.05)
+upper_nFeature <- quantile(all_meta$nFeature_RNA, 0.95)
+max_percent_mt <- 12.5
+
+message("🔎 Using thresholds: nFeature_RNA > ", round(lower_nFeature), 
+        " & < ", round(upper_nFeature),
+        " | percent.mt < ", max_percent_mt)
+
+# Apply filtering to each sample
+filtered_list <- lapply(seurat_list, function(obj) {
+  obj[["percent.mt"]] <- PercentageFeatureSet(obj, pattern = "^mt-")
+  subset(obj, 
+         subset = nFeature_RNA > lower_nFeature &
+                  nFeature_RNA < upper_nFeature &
+                  percent.mt < max_percent_mt)
+})
+
+# Merge all filtered Seurat objects
+merged_filtered <- merge(
+  filtered_list[[1]],
+  y = filtered_list[-1],
+  add.cell.ids = names(filtered_list),
+  project = "HDAC11_Filtered"
+)
+
+# Save merged filtered object
+saveRDS(merged_filtered, here("results", "merged_filtered_percentile_filtered.rds"))
+
+message("✅ Filtering complete. Final merged object saved to: results/merged_filtered_percentile_filtered.rds")
+```
+
+# generate a plot function, them compare metrics before and after filtering
+```{r}
+
+# Extract metadata for violin plotting
+meta_filtered <- merged_filtered@meta.data %>%
+  mutate(cell = colnames(merged_filtered),
+         sample = sample,            # Already assigned in previous steps
+         status = "Post-filter")
+
+# Function to plot a QC metric
+plot_violin_metric <- function(df, metric, y_label, filename) {
+  p <- df %>%
+    ggplot(aes(x = sample, y = .data[[metric]], fill = status)) +
+    geom_violin(alpha = 0.5, position = position_dodge(width = 0.8)) +
+    geom_jitter(alpha = 0.2, size = 0.2, position = position_jitterdodge()) +
+    coord_flip() +
+    labs(x = NULL, y = y_label, title = paste("QC Metric:", y_label)) +
+    theme_bw() +
+    theme(axis.title = element_text(size = 14),
+          axis.text = element_text(size = 12),
+          legend.position = "top")
+
+  ggsave(filename = here("results", filename), plot = p, width = 8, height = 5)
+}
+
+# Example: Plot only post-filter metrics
+plot_violin_metric(meta_filtered, "nFeature_RNA", "# of Detected Genes", "violin_nFeature_post_filter.pdf")
+plot_violin_metric(meta_filtered, "percent.mt", "Mitochondrial Percentage", "violin_percent_mt_post_filter.pdf")
+```
+
+
+
+
+```{r}
+filtered <- subset(
+  merged_seurat,
+  subset =
+    nFeature_RNA > 300 &
+    nFeature_RNA < 6000 &
+    nCount_RNA > 500 &
+    nCount_RNA < 50000 &
+    percent.mt < 12.5
+)
+
+```
+
+
+```{r}
+### How many cells per sample remaining after filtering ###
+
+data %>%
+  mutate(
+    Status = ifelse(nFeature_RNA < 300 | nFeature_RNA > 6000, "Remove", "Keep")
+  ) %>%
+  group_by(sample, Status) %>%
+  summarise(Count = n(),
+            .groups = "drop") %>%
+  pivot_wider(names_from = Status,
+              values_from = Count)
+```
+
+

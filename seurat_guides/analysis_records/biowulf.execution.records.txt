@@ -1,0 +1,69 @@
+######################################################
+############ On Biowulf
+############ IRF/seurat/flex2023/
+######################################################
+############ For original cellranger outputs
+20230629_FLEX: pool1 to pool 6
+20230725_Flex: pool1 to pool 10; this set should be the right set which have been analyzed with the probles containing sars-cov2 probles and also with intact h5 files
+
+############ old and already deleted for files generated before 20230830: Folder of "Todelte/individuals", "4J", "4J-Omicron-D3", "Epsilon"
+For all the analysis before 2023-08-29 2:00 pm, the data from pool 7 and 8 , i.e., 4 samples of 4J, 4 samples of 4M (3 ctrl + Omicron-D3) didn't included SARS-genes, although the host also
+has ORF1ab expression.
+
+individuals: use louven, didn't update the 8 samples
+
+############ 20230906
+h5-badgenerated or h5-questionable were the h5 files moved from loucs pool 7, 8, and 9; for whatever reasons, these files were only partial or wrong; I have deleted them in Locus 20230725/pool7/8/9/nextseq2/per_sample_outs/../count/; I used their count folder for analysis instead. Therefore, no sample_filtered_feature_bc_matrix.h5 available for these 3 pools; however, their count folder still exist in W:\secondary_analysis\FLEX\20230725_FLEX\pool10\nextseq2\per_sample_outs\065E-4D-Omicron-D3\count\sample_filtered_feature_bc_matrix/.
+
+I have two folders in Biowulf
+1. h5files: lack of the problemtic h5 files from pool 7, 8, and 9
+2. count_folder: contain the count folders for pool 7, 8, and 9
+
+############
+20230630-pilot
+20230823-individual contain indivuals_toDelete and individuals-2 (use leiden, updated the 8 samples without SARS-probes (20230906 )) using 20230831-individual-leiden-correctTop20genes
+	This is the one generate analytic results for each sample individually
+20230831-integrate:
+	This is the one generate analytic results for integrated dataset
+	
+the most recent analysis was done on Sep 9th 2023 using the script of 20230823-individual;
+
+############
+# it seems that the sink() function may cause my Rstudio didn't print output (my guess)
+
+############ continue sc analysis using Seurat on Jan 18th 2024
+############ re-organize folders
+backup scripts are saved in the "scripts" folder
+h5 and count tables are saved in the raw_data folder
+hamsterLung reference is saved in hamsterLungRef folder
+
+############ perform new analysis from 20240119-24 using allctrl or allvirus; there are try and errors
+put useful functions into seperate R scripts.
+
+############ 29240124: encounter error in merge or integrate allctrl to allvirus
+
+########### 20240125
+generate 10 new h5 files using scCustmoize from pool7,8,9 and put back them into locus FLEX orignal output folder, also copy of the 10 old h5 files into raw_data/oldCopyH5Pool789Sep6th2023; actually these h5
+
+############ 20240130: found out the h5 newly generated using scCustmize were differnt from h5 from Cellranger
+
+$$$$$$$$$$$$ 20230201-2: copy fastq of pool 7,8,9 and 10 (pool 10 is normal, as check control)from locuse to HPC, regenerate h5 from counts for pool789 using Cellranger, deleted the copy already in locus, 
+
+
+
+
+
+########### 20240206-reinstall some packages, but encounter new errors
+
+
+
+
+
+########## 20240208: figure out the .libPaths() in HPC; explore the paths and its packages in both R/4.2.2 and R/4.3.2; deleted all temp folders generated during failed install shoes folder name starting with "00LOCK-Azimuth...." In vf/users/pengl7/R/4.3. 
+
+Go back to 20240206
+
+
+
+
+
