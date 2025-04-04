@@ -1,0 +1,301 @@
+---
+title: "20250402-EDA"
+output: html_document
+---
+
+```{r}
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+library(Azimuth)
+library(sctransform)
+library(ggplot2)
+library(hdf5r)
+library(dplyr)
+library(reticulate)
+library(DESeq2) # if want to perform DE using this option
+library(reticulate)
+library(BPCells)
+library(tidyverse)
+library(here)
+use_condaenv("/data/pengl7/conda/envs/r4seurat")
+py_config()
+# need to first create a conda env as r4seurat; conda active r4seurat; conda install leidenalg; conda install numpy pandas; start rstudio&
+leidenalg <- import("leidenalg")
+```
+
+```{r}
+merged <- readRDS(here("results", "merged_filtered_percentile_filtered.rds"))
+```
+
+
+```{r}
+merged
+```
+
+# Each sample has about 7K cells after initial data filtering
+
+```{r}
+head(merged@meta.data)
+table(merged$orig.ident)  # or check other metadata columns like merged$condition
+```
+# add meta inforjmation: condition, replicate, batch 
+
+```{r}
+merged$condition <- ifelse(grepl("WT", merged$orig.ident), "WT", "KO")
+merged$replicate <- ifelse(grepl("1", merged$orig.ident), "1", "2")
+head(merged$condition)
+```
+
+# Basic QC plots
+1. Before batch correction, check for potential variation across samples.
+```{r}
+VlnPlot(merged, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), group.by = "orig.ident", pt.size = 0.1)
+
+```
+
+# FeatureScatter
+nCount_RNA VS nFeature_RNA
+A strong correlation here is typical. Outliers (too many counts but few features) might be doublets or dead cells.
+
+
+```{r}
+FeatureScatter(merged, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+
+```
+
+```{r}
+
+```
+
+
+# Normalize and Identify Variable Genes
+
+```{r}
+merged <- NormalizeData(merged)
+merged <- FindVariableFeatures(merged, selection.method = "vst", nfeatures = 2000)
+```
+
+#. PCA, UMAP & Clustering
+This is still pre-batch correction, just to explore structure:
+
+```{r}
+merged <- ScaleData(merged, vars.to.regress = "percent.mt")  # Optional regression
+merged <- RunPCA(merged)
+```
+
+
+# check the difference by choosing pcs 30 and 50
+```{r}
+ElbowPlot(merged, ndims = 50)
+
+```
+
+
+```{r}
+merged <- RunUMAP(merged, dims = 1:20)
+DimPlot(merged, label = TRUE)
+
+merged <- RunUMAP(merged, dims = 1:30)
+DimPlot(merged, label = TRUE)
+
+```
+# chose PCs=30 to perform clustering
+
+```{r}
+
+merged <- RunUMAP(merged, dims = 1:30)
+merged <- FindNeighbors(merged, dims = 1:30)
+merged <- FindClusters(merged, resolution = 0.4)
+```
+
+Visualize clusters:
+```{r}
+DimPlot(merged, group.by = "seurat_clusters", label = TRUE)
+
+```
+
+
+
+```{r}
+merged <- FindClusters(merged, resolution = 0.3)
+DimPlot(merged, group.by = "seurat_clusters", label = TRUE)
+```
+
+
+```{r}
+merged <- FindClusters(merged, resolution = 0.2)
+DimPlot(merged, group.by = "seurat_clusters", label = TRUE)
+```
+
+
+```{r}
+#install.packages("clustree")
+library(clustree)
+clustree(merged, prefix = "RNA_snn_res.")
+
+```
+
+
+# Assess cluster quality of r0.2
+
+Need to join layers before performing FindAllMarkers since I merged 4 samples together which keep their indiviaul data and count slots
+
+```{r}
+merged <- JoinLayers(
+  object = merged,
+  assay = "RNA",
+  slot = "data",                     # or "counts" if you're starting from raw counts
+  new.layer = "joined_normalized"    # name for the new combined layer
+)
+
+```
+
+Before JoinLayer
+4 layers present: counts.1KO, counts.1WT, counts.2KO, counts.2WT
+After JoinLayer: 3 layers present: data, counts, scale.data
+
+```{r}
+merged
+```
+
+Use marker genes to check whether these clusters represent distinct biological identities:
+
+```{r}
+Idents(merged) <- "seurat_clusters"
+markers <- FindAllMarkers(
+  merged,
+  only.pos = TRUE,
+  min.pct = 0.1,
+  logfc.threshold = 0.1
+)
+```
+
+
+```{r}
+top10 <- markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+DoHeatmap(merged, features = top10$gene) + NoLegend()
+```
+visualize specific genes
+
+```{r}
+FeaturePlot(merged, features = c("Upk3a", "Acta2", "Col1a1", "Cd3e", "Cd79a"))
+DotPlot(merged, features = c("Upk3a", "Acta2", "Col1a1", "Cd3e", "Cd79a")) + RotatedAxis()
+
+```
+
+
+```{r}
+DotPlot(merged, features = list(
+  Urothelial = c("Upk3a", "Krt20", "Krt8"),
+  SmoothMuscle = c("Acta2", "Tagln", "Myh11"),
+  Fibroblast = c("Col1a1", "Dcn", "Pdgfra"),
+  Tcell = c("Cd3e", "Cd3d", "Trac"),
+  Bcell = c("Cd79a", "Ms4a1"),
+  Macrophage = c("Lyz2", "Adgre1")
+)) + RotatedAxis()
+
+```
+
+
+```{r}
+VlnPlot(merged, features = c("Acta2", "Col1a1", "Cd3e"), group.by = "seurat_clusters", pt.size = 0.1)
+
+```
+
+# Step-by-Step: Check for Batch Effects in Seurat
+Plot UMAP by batch/sample/condition
+```{r}
+# Color by sample identity
+DimPlot(merged, group.by = "orig.ident", label = TRUE, repel = TRUE)
+
+
+```
+
+
+```{r}
+
+# Optional: split UMAP by sample or condition
+DimPlot(merged, split.by = "orig.ident", group.by = "seurat_clusters")
+```
+
+
+```{r}
+DimPlot(merged, split.by = "condition", group.by = "seurat_clusters")
+```
+
+# Visualize sample composition per cluster
+This helps quantify how balanced each cluster is across samples:
+```{r}
+# Table of cluster × sample counts
+tbl <- table(merged$seurat_clusters, merged$orig.ident)
+
+# Reorder samples: WT1, WT2, KO1, KO2
+sample_order <- c("1WT", "2WT", "1KO", "2KO")  # adjust based on your actual sample names
+# Reorder the table columns
+tbl <- tbl[, sample_order]
+# Colors for clusters — use a consistent vector across plot & legend
+cluster_colors <- 1:nrow(tbl)  # or you can define manually, like c("black", "red", ...)
+# Proportions per sample
+tbl_prop <- prop.table(tbl, margin = 2)
+
+# Plot: That means 4 colors (recycled for each group of bars)
+par(mar = c(5, 4, 4, 8), xpd = TRUE)
+barplot(tbl_prop, beside = TRUE, col = 1:4,
+        main = "Sample composition per cluster",
+        ylab = "Proportion")
+
+# Legend
+legend("topright", inset = c(-0.2, 0),
+       legend = rownames(tbl),
+       fill = cluster_colors,
+       title = "Cluster",
+       cex = 0.8)
+```
+```{r}
+# Normalize proportions per cluster
+tbl_prop <- prop.table(tbl, margin = 2)
+
+# Set layout so there's space on the right for the legend
+par(mar = c(5, 4, 4, 8), xpd = TRUE)
+
+# Barplot with room for the legend
+barplot(tbl_prop,
+        beside = TRUE,
+        col = rainbow(nrow(tbl)),
+        main = "Sample composition per cluster",
+        ylab = "Proportion",
+        las = 2)
+
+# Add legend to the right
+legend("topright", inset = c(-0.2, 0), legend = rownames(tbl),
+       fill = rainbow(nrow(tbl)), title = "Cluster", cex = 0.8)
+```
+
+
+```{r}
+as.data.frame(tbl) %>%
+  ggplot(aes(x = Var1, y = Freq, fill = Var2)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(x = "Cluster", y = "Proportion", fill = "Sample") +
+  theme_minimal()
+
+```
+
+# save the rds which has been clustred and joinedLayer
+```{r}
+saveRDS(merged, file = here("results", "layerJoined_clusted.rds"))
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+

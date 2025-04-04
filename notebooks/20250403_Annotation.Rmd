@@ -1,0 +1,257 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-04-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Bioconductor core
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install(c("SingleR", "celldex", "SummarizedExperiment"))
+
+# Optional: for converting Seurat -> SingleCellExperiment
+install.packages("SingleCellExperiment")
+
+```
+
+
+```{r}
+library(SingleR)
+library(celldex)
+library(Seurat)
+library(SingleCellExperiment)
+library(here)
+```
+
+
+```{r}
+merged <- readRDS(here("results", "layerJoined_clusted.rds"))
+DefaultAssay(merged)
+```
+
+
+```{r}
+DefaultLayer(merged[["RNA"]]) <- "data" 
+```
+
+
+```{r}
+Idents(merged) <- "seurat_clusters"
+```
+
+Re-cluster Using the Leiden Algorithm
+ Leiden clustering in Seurat depends on the Python leidenalg package, which in turn requires Python and pandas to be available via reticulate (R’s bridge to Python).
+
+```{r}
+library(reticulate)
+
+# See which Python environment R is using
+py_config()
+
+```
+
+Install pandas into your existing virtualenv
+```{r}
+reticulate::use_virtualenv("/spin1/home/linux/pengl7/.virtualenvs/r-reticulate", required = TRUE)
+reticulate::py_install("pandas")
+
+```
+
+```{r}
+# (Re-)run FindNeighbors if not already done
+merged <- FindNeighbors(merged, dims = 1:30)
+
+
+```
+
+Running leiden takes lots mem > 80G, max use 100G for 2.1G rds object
+```{r}
+
+# Run Leiden clustering
+merged <- FindClusters(merged, algorithm = 4, resolution = 0.2)  # you can adjust resolution
+```
+
+
+There isn't big difference on the clustering beteeen leiden and default
+```{r}
+
+# Check new clusters
+table(merged$seurat_clusters)
+DimPlot(merged, group.by = "seurat_clusters", label = TRUE, repel = TRUE)
+```
+
+
+```{r}
+saveRDS(merged, here("results", "clusterByLeiden0.2.rds"))
+```
+
+# try annotation using singleR
+
+Convert Your Seurat Object to SingleCellExperiment
+Make sure the correct assay and layer are set:
+```{r}
+DefaultAssay(merged) <- "RNA"
+DefaultLayer(merged[["RNA"]]) <- "data"
+
+# Convert
+sce <- as.SingleCellExperiment(merged)
+```
+
+There’s no reference called “bladder” specifically, but ImmGen and MouseRNAseq contain many of the relevant immune, stromal, and epithelial types you’d expect in bladder tissue.
+
+Try this first:
+```{r}
+ref <- celldex::ImmGenData(verbose = TRUE)  # good for immune + stromal cells
+
+```
+
+```{r}
+saveRDS(ref, "ImmGenData.rds")
+```
+
+
+Run SingleR Annotation
+```{r}
+# This will return a data frame with predicted labels and confidence scores for each cell.
+pred <- SingleR(test = sce, ref = ref, labels = ref$label.main)
+# If you want more granular labels:
+# pred <- SingleR(test = sce, ref = ref, labels = ref$label.fine)
+
+```
+
+Add Labels Back to Seurat Object
+```{r}
+merged$SingleR <- pred$labels
+Idents(merged) <- "SingleR"
+DimPlot(merged, group.by = "SingleR", label = TRUE, repel = TRUE)
+
+```
+
+```{r}
+str(pred)
+
+```
+
+
+```{r}
+delta_values <- as.numeric(pred$delta.next)
+hist(delta_values, breaks = 50,
+     main = "SingleR Prediction Confidence",
+     xlab = "Delta (top vs second-best score)")
+
+```
+
+
+# check the cell doublets and score cell cycle
+
+The expected doublet rate for 10x Genomics data is strongly dependent on the number of cells loaded during GEM (Gel Bead-in-Emulsion) generation, and 10x has published fairly detailed guidance.
+
+10K cells per sample Expected Doublet Rate is ~8.0%
+Or use a slightly conservative estimate like 5–6% globally
+
+```{r}
+#devtools::install_github('chris-mcginnis-ucsf/DoubletFinder')
+library(DoubletFinder)
+```
+
+
+
+```{r}
+# Estimate expected doublets: ~1% for 10x, or use nExp = 0.05 * ncol(merged)
+nExp_poi <- round(0.05 * ncol(merged))  # 5% doublets
+
+# Run DoubletFinder
+sweep.res <- paramSweep(merged, PCs = 1:30, sct = FALSE)
+sweep.stats <- summarizeSweep(sweep.res, GT = FALSE)
+bcmvn <- find.pK(sweep.stats)
+```
+```{r}
+library(ggplot2)
+
+# Convert pK column to numeric (if needed)
+bcmvn$pK <- as.numeric(as.character(bcmvn$pK))
+
+# Find pK with highest BCmetric
+best_index <- which.max(bcmvn$BCmetric)
+best_pK <- bcmvn$pK[best_index]
+best_metric <- bcmvn$BCmetric[best_index]
+
+cat("Best pK:", best_pK, "with BCmetric:", best_metric, "\n")
+
+# Plot with labeled axes and a line at best pK
+ggplot(bcmvn, aes(x = pK, y = BCmetric)) +
+  geom_point(color = "dodgerblue") +
+  geom_line(color = "dodgerblue") +
+  geom_vline(xintercept = best_pK, color = "red", linetype = "dashed") +
+  annotate("text", x = best_pK, y = best_metric + 0.01, label = paste0("Best pK = ", best_pK),
+           hjust = 0, color = "red", size = 3) +
+  labs(
+    title = "BCmetric vs pK",
+    x = "pK (neighborhood size)",
+    y = "BCmetric (classification performance)"
+  ) +
+  theme_minimal()
+
+
+```
+
+pN: This is almost always left at 0.25, the recommended default: 0.25
+pK: choose according to the above BCmetric plot
+
+```{r}
+
+best_pK <- as.numeric(bcmvn$pK[which.max(bcmvn$BCmetric)])
+
+# Convert seurat_clusters column to character
+#merged$seurat_clusters <- as.character(merged$seurat_clusters)
+#Idents(merged) <- merged$seurat_clusters
+
+merged <- doubletFinder(
+  merged,
+  PCs = 1:30,
+  pN = 0.25,
+  pK = best_pK,        # ← use your top pK here
+  nExp = round(0.08 * ncol(merged)),
+  sct = FALSE
+)
+
+```
+
+
+```{r}
+# Inspect results
+table(merged@meta.data[[grep("DF.classification", names(merged@meta.data), value = TRUE)]])
+DimPlot(merged, group.by = grep("DF.classification", names(merged@meta.data), value = TRUE))
+```
+
+
+Compare to the estimate doublet rate of 4%
+
+```{r}
+merged <- doubletFinder(
+  merged,
+  PCs = 1:30,
+  pN = 0.25,
+  pK = best_pK,        # ← use your top pK here
+  nExp = round(0.04 * ncol(merged)),
+  sct = FALSE
+)
+```
+
+
+```{r}
+# Inspect results
+table(merged@meta.data[[grep("DF.classification", names(merged@meta.data), value = TRUE)]])
+DimPlot(merged, group.by = grep("DF.classification", names(merged@meta.data), value = TRUE))
+```
+
+
+```{r}
+```
+
