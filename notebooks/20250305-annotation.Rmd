@@ -1,0 +1,154 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-04-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(Seurat)
+library(SingleR)
+library(celldex)
+library(here)
+library(ggplot2)
+library(dplyr)
+```
+
+
+```{r}
+merged <- readRDS(here("results", "noDoublets_scoreCellCycle.rds"))
+```
+
+```{r}
+names(merged@meta.data)
+```
+
+```{r}
+DefaultAssay(merged) <- "RNA"
+DefaultLayer(merged[["RNA"]]) <- "data"
+Idents(merged) <- "seurat_clusters"
+```
+
+
+```{r}
+DimPlot(merged, group.by = "seurat_clusters", label = TRUE, repel = TRUE)
+```
+
+
+```{r}
+# Convert
+sce <- as.SingleCellExperiment(merged)
+#ref <- celldex::ImmGenData(verbose = TRUE)  # good for immune + stromal cells
+#saveRDS(ref, "ImmGenData.rds")
+#I already cache and save it.
+ref <- readRDS(here("ref", "ImmGenData.rds"))
+```
+
+# first use the dataset of ImmGenData ref
+
+```{r}
+# This will return a data frame with predicted labels and confidence scores for each cell.
+pred <- SingleR(test = sce, ref = ref, labels = ref$label.main)
+# If you want more granular labels:
+# pred <- SingleR(test = sce, ref = ref, labels = ref$label.fine)
+```
+
+Add Labels Back to Seurat Object
+Use cell-level annotation to get a fine-grained view
+if add clusters=seurat_obj$seurat_clusters, will perform cluster-level annotion which is faster, less noisy, but may miss heterogenity within a cluster and not useful if your clusters are mixed
+
+```{r}
+merged$SingleR_main <- pred$labels
+Idents(merged) <- "SingleR_main"
+DimPlot(merged, group.by = "SingleR_main", label = TRUE, repel = TRUE)
+```
+
+
+The delta score is the difference between the top and second-best predicted labels for each cell.
+
+Higher delta = higher confidence.
+Lower delta (< 0.2) means the classifier was not very confident — the top two labels were close in score.
+
+If most deltas are < 0.2:
+
+The predictions are low-confidence overall.
+There might be mixed or ambiguous cell types, or
+The reference dataset (ImmGenData) may not fully capture your cell types (especially if you have non-immune cells in your bladder dataset).
+
+```{r}
+delta_values <- as.numeric(pred$delta.next)
+hist(delta_values, breaks = 50,
+     main = "SingleR Prediction Confidence",
+     xlab = "Delta (top vs second-best score)")
+
+```
+
+# test annother ref 
+```{r}
+# Load the MouseRNAseqData reference
+ref_mouse <- celldex::MouseRNAseqData()
+```
+
+
+```{r}
+saveRDS(ref_mouse, here("ref", "MouseRNAseqData"))
+```
+
+
+```{r}
+# Run SingleR with this reference (cell-level annotation)
+pred_mouse <- SingleR(test = sce,
+                      ref = ref_mouse,
+                      labels = ref_mouse$label.main)
+
+merged$SingleR_mouse_main <- pred_mouse$labels
+Idents(merged) <- "SingleR_mouse_main"
+DimPlot(merged, group.by = "SingleR_mouse_main", label = TRUE, repel = TRUE)
+```
+
+# The results is worse
+
+```{r}
+delta_mouse_values <- as.numeric(pred_mouse$delta.next)
+hist(delta_mouse_values, breaks = 50,
+     main = "SingleR Prediction Confidence",
+     xlab = "Delta (top vs second-best score)")
+```
+# try mannual annotation
+
+```{r}
+# One by one or a few at a time
+seurat_obj <- merged
+FeaturePlot(seurat_obj, features = c("Upk1a", "Krt5", "Krt20"))
+FeaturePlot(seurat_obj, features = c("Pecam1", "Cdh5"))
+VlnPlot(seurat_obj, features = c("Col1a1", "Acta2"))
+
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+

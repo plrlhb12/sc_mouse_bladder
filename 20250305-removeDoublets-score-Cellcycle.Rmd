@@ -1,0 +1,264 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-04-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Remove doublets and score cell cyle
+Continue with the rds of clusterByLeiden0.2.rds
+
+```{r}
+library(Seurat)
+library(DoubletFinder)
+library(here)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+merged <- readRDS(here("results","clusterByLeiden0.2.rds"))
+print(merged)
+```
+
+# make sure the default assay is RNA and DefaultLayer is data
+```{r}
+DefaultAssay(merged) <- "RNA"
+DefaultLayer(merged[["RNA"]]) <- "data"
+```
+
+
+# check the cell doublets and score cell cycle
+
+The expected doublet rate for 10x Genomics data is strongly dependent on the number of cells loaded during GEM (Gel Bead-in-Emulsion) generation, and 10x has published fairly detailed guidance.
+
+10K cells per sample Expected Doublet Rate is ~8.0%
+Or use a slightly conservative estimate like 5–6% globally
+since my dataset has been filtered out top and bottom 5% which removed many doublets,
+I also have explored using 8%, now explore with 5%
+
+Term	Meaning
+pK	Number of neighbors to consider for doublet scoring
+BCmetric	Score of how well artificial vs. real cells are separated
+pANN	% of nearest neighbors that are artificial (per cell)
+pN	% of artificial doublets added to the dataset
+
+```{r}
+# Run DoubletFinder
+sweep.res <- paramSweep(merged, PCs = 1:30, sct = FALSE)
+sweep.stats <- summarizeSweep(sweep.res, GT = FALSE)
+bcmvn <- find.pK(sweep.stats)
+```
+
+
+```{r}
+# Convert pK column to numeric (if needed)
+bcmvn$pK <- as.numeric(as.character(bcmvn$pK))
+
+# Find pK with highest BCmetric
+best_index <- which.max(bcmvn$BCmetric)
+best_pK <- bcmvn$pK[best_index]
+best_metric <- bcmvn$BCmetric[best_index]
+
+cat("Best pK:", best_pK, "with BCmetric:", best_metric, "\n")
+
+# Plot with labeled axes and a line at best pK
+ggplot(bcmvn, aes(x = pK, y = BCmetric)) +
+  geom_point(color = "dodgerblue") +
+  geom_line(color = "dodgerblue") +
+  geom_vline(xintercept = best_pK, color = "red", linetype = "dashed") +
+  annotate("text", x = best_pK, y = best_metric + 0.01, label = paste0("Best pK = ", best_pK),
+           hjust = 0, color = "red", size = 3) +
+  labs(
+    title = "BCmetric vs pK",
+    x = "pK (neighborhood size)",
+    y = "BCmetric (classification performance)"
+  ) +
+  theme_minimal()
+```
+
+pN: This is almost always left at 0.25, the recommended default: 0.25
+pK: choose according to the above BCmetric plot
+
+Check when using 5%
+```{r}
+
+# Estimate expected doublets: ~1% for 10x, or use nExp = 0.05 * ncol(merged)
+nExp_poi <- round(0.05 * ncol(merged))  # 5% doublets
+
+merged <- doubletFinder(
+  merged,
+  PCs = 1:30,
+  pN = 0.25,
+  pK = best_pK,        # ← use your top pK here
+  nExp = nExp_poi, # ← use your top nExp_poi here
+  sct = FALSE
+)
+
+table(merged@meta.data[[grep("DF.classification", names(merged@meta.data), value = TRUE)]])
+DimPlot(merged, group.by = grep("DF.classification", names(merged@meta.data), value = TRUE))
+
+```
+```{r}
+# Inspect results
+df_col <- grep("DF.classifications", names(merged@meta.data), value = TRUE)[1]
+table(merged@meta.data[[df_col]])
+DimPlot(merged, group.by = df_col)
+```
+
+
+```{r}
+nExp_poi <- round(0.08 * ncol(merged))  # 5% doublets
+
+merged <- doubletFinder(
+  merged,
+  PCs = 1:30,
+  pN = 0.25,
+  pK = best_pK,        # ← use your top pK here
+  nExp = nExp_poi, # ← use your top nExp_poi here
+  sct = FALSE
+)
+
+```
+
+```{r}
+colnames(merged@meta.data)
+```
+
+```{r}
+# Inspect results
+df_col <- grep("DF.classifications", names(merged@meta.data), value = TRUE)[3]
+table(merged@meta.data[[df_col]])
+DimPlot(merged, group.by = df_col)
+```
+
+# remove doublets using the ratio 5%
+
+First remove unnecessary meta data saved in the objects: pANN...DF...
+
+```{r}
+print(names(merged@meta.data))
+```
+
+
+```{r}
+cols_to_remove <- c(
+  "pANN_0.25_0.24_1513",
+  "pANN_0.25_0.25_2420",
+  "DF.classifications_0.25_0.24_1513",
+  "DF.classifications_0.25_0.25_2420"
+)
+
+merged@meta.data <- merged@meta.data[, !(colnames(merged@meta.data) %in% cols_to_remove)]
+
+```
+
+"pANN_0.25_0.25_1513": 0.25 means generate %25 number of the total cells as artificial doulbets, secnodn 0.25 means %25 real cells were used for generate ANN score, 1513 means there are 1513 doublet cells
+```{r}
+print(names(merged@meta.data))
+```
+
+```{r}
+# Step 1: Identify singlet cells using your metadata column
+df_col <- grep("DF.classifications", names(merged@meta.data), value = TRUE)[1]
+singlet_cells <- colnames(merged)[merged@meta.data[[df_col]] == "Singlet"]
+
+# Step 2: Subset using those cell names
+merged_noDoublet <- subset(merged, cells = singlet_cells)
+```
+
+
+```{r}
+print(merged_noDoublet)
+DimPlot(merged_noDoublet)
+
+```
+Removing doublets can slightly shift the structure of your data. It's a good idea to re-run the belows
+I didn't use leiden anymore, since I didn't notice apprarent difference in clusters and it use too much resouces, takes longer, need python env
+
+```{r}
+library(magrittr)  # enables the pipe (%>%)
+
+merged_noDoublet <- merged_noDoublet %>%
+  ScaleData() %>%
+  RunPCA(npcs = 30) %>%
+  FindNeighbors(dims = 1:30) %>%
+  FindClusters(resolution = 0.2) %>%
+  RunUMAP(dims = 1:30)
+```
+
+save a temp rds
+```{r}
+#saveRDS(merged_noDoublet, file = here("results", "noDoublets.rds"))
+```
+
+# Score Cell Cycle in Seurat
+
+Seurat includes canonical S phase and G2/M phase genes:
+
+```{r}
+s.genes <- Seurat::cc.genes.updated.2019$s.genes
+g2m.genes <- Seurat::cc.genes.updated.2019$g2m.genes
+
+```
+
+Make sure your data is normalized first 
+
+- Adds three new columns to merged@meta.data:
+-- "S.Score" — how strongly each cell expresses S phase genes
+-- "G2M.Score" — expression of G2/M genes
+-- "Phase" — inferred cell cycle phase: "G1", "S", or "G2M"
+- Optionally sets the Seurat identity class (Idents) to "Phase" if set.ident = TRUE
+
+```{r}
+merged_noDoublet <- CellCycleScoring(
+  merged_noDoublet,
+  s.features = s.genes,
+  g2m.features = g2m.genes,
+  set.ident = TRUE
+)
+
+```
+```{r}
+DimPlot(merged_noDoublet, group.by = "seurat_clusters")
+```
+
+Visualize cell cycle
+```{r}
+DimPlot(merged_noDoublet, group.by = "Phase", split.by = "condition", label = TRUE)
+```
+```{r}
+DimPlot(merged_noDoublet, group.by = "Phase", label = TRUE)
+```
+
+```{r}
+g1_cells <- colnames(merged_noDoublet)[merged_noDoublet$Phase == "G1"]
+merged_G1 <- subset(merged_noDoublet, cells = g1_cells)
+DimPlot(merged_G1, group.by = "Phase", split.by = "condition", label = TRUE)
+```
+
+
+```{r}
+g2_cells <- colnames(merged_noDoublet)[merged_noDoublet$Phase == "G2M"]
+merged_G2M <- subset(merged_noDoublet, cells = g2_cells)
+DimPlot(merged_G2M, group.by = "Phase", split.by = "condition", label = TRUE)
+```
+
+```{r}
+S_cells <- colnames(merged_noDoublet)[merged_noDoublet$Phase == "S"]
+merged_S <- subset(merged_noDoublet, cells = S_cells)
+DimPlot(merged_S, group.by = "Phase", split.by = "condition", label = TRUE)
+```
+
+
+```{r}
+VlnPlot(merged_noDoublet, features = c("S.Score", "G2M.Score"), group.by = "Phase")
+```
+save a temp rds
+```{r}
+saveRDS(merged_noDoublet, file = here("results", "noDoublets_scoreCellCycle.rds"))
+```
+

@@ -1,6 +1,6 @@
 # Ignore files inisde data folder
 data/*
-
+notebooks/*.html
 # Ignore large Seurat objects
 *.rds
 *.h5

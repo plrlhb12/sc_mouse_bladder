@@ -9,14 +9,14 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-# Bioconductor core
-if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-
-BiocManager::install(c("SingleR", "celldex", "SummarizedExperiment"))
-
-# Optional: for converting Seurat -> SingleCellExperiment
-install.packages("SingleCellExperiment")
+# # Bioconductor core
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# 
+# BiocManager::install(c("SingleR", "celldex", "SummarizedExperiment"))
+# 
+# # Optional: for converting Seurat -> SingleCellExperiment
+# install.packages("SingleCellExperiment")
 
 ```
 
@@ -58,8 +58,8 @@ py_config()
 
 Install pandas into your existing virtualenv
 ```{r}
-reticulate::use_virtualenv("/spin1/home/linux/pengl7/.virtualenvs/r-reticulate", required = TRUE)
-reticulate::py_install("pandas")
+# reticulate::use_virtualenv("/spin1/home/linux/pengl7/.virtualenvs/r-reticulate", required = TRUE)
+# reticulate::py_install("pandas")
 
 ```
 
@@ -112,7 +112,7 @@ ref <- celldex::ImmGenData(verbose = TRUE)  # good for immune + stromal cells
 ```
 
 ```{r}
-saveRDS(ref, "ImmGenData.rds")
+saveRDS(ref, here("ref", "ImmGenData.rds"))
 ```
 
 
@@ -126,6 +126,9 @@ pred <- SingleR(test = sce, ref = ref, labels = ref$label.main)
 ```
 
 Add Labels Back to Seurat Object
+Use cell-level annotation to get a fine-grained view
+if add clusters=seurat_obj$seurat_clusters, will perform cluster-level annotion which is faster, less noisy, but may miss heterogenity within a cluster and not useful if your clusters are mixed
+
 ```{r}
 merged$SingleR <- pred$labels
 Idents(merged) <- "SingleR"
@@ -137,7 +140,20 @@ DimPlot(merged, group.by = "SingleR", label = TRUE, repel = TRUE)
 str(pred)
 
 ```
+```{r}
+summary(pred$pruned.labels)
+head(pred$scores)
+```
+The delta score is the difference between the top and second-best predicted labels for each cell.
 
+Higher delta = higher confidence.
+Lower delta (< 0.2) means the classifier was not very confident — the top two labels were close in score.
+
+If most deltas are < 0.2:
+
+The predictions are low-confidence overall.
+There might be mixed or ambiguous cell types, or
+The reference dataset (ImmGenData) may not fully capture your cell types (especially if you have non-immune cells in your bladder dataset).
 
 ```{r}
 delta_values <- as.numeric(pred$delta.next)
