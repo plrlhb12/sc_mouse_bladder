@@ -1,6 +1,7 @@
 # Ignore files inisde data folder
 data/*
 notebooks/*.html
+
 # Ignore large Seurat objects
 *.rds
 *.h5
@@ -16,7 +17,8 @@ results/*
 # R session files
 .Rhistory
 .RData
-.Rproj.user/
+.Rproj
+.user/
 .RDataTmp*
 
 # Ignore large pdf file
