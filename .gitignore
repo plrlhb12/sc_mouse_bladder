@@ -20,6 +20,7 @@ results/*
 .Rproj
 .user/
 .RDataTmp*
+renv/*
 
 # Ignore large pdf file
 *.pdf
