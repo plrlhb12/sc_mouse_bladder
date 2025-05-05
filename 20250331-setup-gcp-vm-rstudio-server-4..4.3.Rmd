@@ -1,0 +1,118 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-03-31"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+sudo apt-get update && sudo apt-get install -y   libcurl4-openssl-dev   libssl-dev   libxml2-dev   libharfbuzz-dev   libfribidi-dev   libpng-dev   libcairo2-dev   libfontconfig1-dev   libtiff5-dev   libjpeg-dev   libgl1-mesa-dev   libglu1-mesa-dev   libgdal-dev
+
+```{r}
+install.packages(c(
+  "Seurat",
+  "patchwork",
+  "sctransform",
+  "ggplot2",
+  "dplyr",
+  "reticulate",
+  "tidyverse"
+))
+
+```
+
+```{r}
+install.packages("BiocManager")
+BiocManager::install(c("DESeq2", "hdf5r"))
+
+```
+
+```{r}
+#install.packages("SeuratData") #notworking
+install.packages("remotes")
+remotes::install_github("satijalab/seurat-data")
+library(SeuratData)
+SeuratData::InstallData("pbmc3k")
+
+```
+
+# install the dependency of Azimuth
+sudo apt-get update && sudo apt-get install -y libgsl-dev
+```{r}
+# dpendence for TFBSTools
+BiocManager::install("DirichletMultinomial", update = FALSE, ask = FALSE)
+```
+
+```{r}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+BiocManager::install(c(
+  "BSgenome.Hsapiens.UCSC.hg38",
+  "EnsDb.Hsapiens.v86",
+  "TFBSTools"
+))
+
+```
+```{r}
+BiocManager::install("HDF5Array")
+install.packages("assertthat")
+```
+
+```{r}
+#remotes::install_github("const-ae/glmGamPoi", verbose = TRUE) # failed
+BiocManager::install("glmGamPoi")
+
+```
+
+```{r}
+remotes::install_github("satijalab/azimuth")
+```
+
+```{r}
+#BiocManager::install("BPCells") # failed
+
+```
+
+```{r}
+library(Seurat)
+library(SeuratData)
+library(patchwork)
+library(Azimuth)
+library(sctransform)
+library(ggplot2)
+library(hdf5r)
+library(dplyr)
+library(reticulate)
+library(DESeq2) # if want to perform DE using this option
+library(reticulate)
+#library(BPCells)
+library(tidyverse)
+```
+
+Use this to snapshot your working packages:
+renv maintains a local cache of data on the filesystem, located at:
+  - "~/.cache/R/renv"
+
+o Recreate This Setup on Another VM Later
+Copy your project folder (with renv.lock and renv/) and run:
+
+```{r}
+install.packages("renv")
+renv::init()
+```
+
+
+That ensures you never go through this dependency maze again 😄
+```{r}
+renv::status()
+```
+```{r}
+library(renv)
+renv::settings$ignored.packages("BPCells")
+renv::settings("ignored.files", value = c("notebooks"))
+renv::snapshot()
+```
+
