@@ -4,7 +4,7 @@ library(Seurat)
 library(patchwork)
 library(SeuratObject)
 library(ggplot2)
-library(SCTransform)
+library(sctransform)
 library(Azimuth)
 library(glmGamPoi)
 #options(Seurat.object.assay.version = "v5") # only need when annotate for ATAC, otherwise v4 is enough

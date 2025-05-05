@@ -17,8 +17,7 @@ results/*
 # R session files
 .Rhistory
 .RData
-.Rproj
-.user/
+.Rproj.user/
 .RDataTmp*
 renv/*
 
