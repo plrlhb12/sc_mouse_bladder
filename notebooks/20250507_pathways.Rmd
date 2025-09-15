@@ -1,0 +1,392 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-04-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# This is executed in GCP VM rstudio server
+
+```{r}
+# install.packages("remotes")
+# remotes::install_github("carmonalab/UCell")
+```
+
+```{r}
+library(Seurat)
+library(here)
+library(UCell)
+library(dplyr)
+library(ggplot2)
+library(fs) # for dir_create()
+library(patchwork) #for wrap figs
+
+```
+
+```{r}
+set.seed(123)
+```
+
+
+
+
+# load the object
+
+```{r}
+merged <- readRDS(here("results", "final.rds"))
+```
+
+# create new output folder
+
+```{r}
+pathways_out <- "explore_pathways_output"
+genes_out <- "explore_genes_output"
+dir.create(here("results", pathways_out))
+dir.create(here("results", genes_out))
+```
+
+
+# explore the marker expression of the pathways of interest using FeaturePlot and VlnPlot
+
+Focus on smooth muscle cells, compare KO to WT
+
+```{r}
+pathways <- list(
+  "Contractile_Protein" = c("Acta2", "Myocd", "Tagln", "Cald1", "Cnn1", "Des", "Vcl", "Myh11", "Smtn"),
+  "RhoA_ROCK_signaling" = c("Rhoa", "Rock1", "Rock2"),
+  "Calcium_signaling" = c("Mlck", "Camk2a", "Ppp3ca"),
+  "GPCR_signaling" = c("Chrm2", "Chrm3", "Adrb1", "Adrb2", "Adrb3", "P2rx3", "P2ry1", "Gnaq", "Gnas"),
+  "Prostaglandin_receptors" = c("Ptger1", "Ptger2", "Ptger3", "Ptger4", "Ptgfr"),
+  "TGF_B_signaling" = c("Tgfb1", "Tgfb2", "Tgfbr1", "Tgfbr2"),
+  "TRP_channels" = c("Trpv1", "Trpv4", "Trpc6", "Trpm4"),
+  "EGFR_signaling" = c("Egfr", "Erbb2", "Erbb3", "Grb2", "Mapk1"),
+  "Notch_Wnt_signaling" = c("Notch1", "Notch2", "Wnt1", "Wnt3a", "Ctnnb1", "Dll1"),
+  "ECM_receptor_interaction" = c("Col1a1", "Col4a1", "Fn1", "Lama1", "Itga5", "Itgb1"),
+  "TGF_B_SMAD_signaling" = c("Smad2", "Smad3", "Smad4", "Smad7"),
+  "PI3K_AKT_signaling" = c("Pik3ca", "Pik3cb", "Akt1", "Akt2", "Mtor", "Pten"),
+  "Wnt_signaling" = c("Wnt1", "Wnt3a", "Fzd7", "Lrp6", "Tcf7l2"),
+  "Integrin_signaling" = c("Itgb1", "Itga5", "Tln1", "Vcl"),
+  "AP-1_signaling" = c("Jun", "Junb", "Jund", "Fos", "Fosb", "Fosl1", "Fosl2" )
+)
+
+
+```
+
+
+# explore the expression of the genes of interest individually
+# first using Feature plot
+
+
+```{r}
+for (pathway in names(pathways)) {
+  genes <- pathways[[pathway]]
+  valid_genes <- genes[genes %in% rownames(merged)]
+  
+  if (length(valid_genes) > 0) {
+    plots <- FeaturePlot(merged, features = valid_genes, combine = FALSE)
+    plots <- lapply(plots, function(p) p + theme(title = element_text(size = 10)))
+    combined_plot <- wrap_plots(plots) + plot_annotation(title = pathway)
+    
+    tryCatch({
+    ggsave(filename = here("results", genes_out, paste0(pathway, ".png")), plot = combined_plot, width = 12, height = 8, dpi = 300)
+    })
+    
+  } else {
+    message(paste("No valid genes found for:", pathway))
+  }
+}
+  
+
+```
+
+
+```{r}
+for (pathway in names(pathways)) {
+  genes <- pathways[[pathway]]
+  valid_genes <- genes[genes %in% rownames(merged)]
+  
+  if (length(valid_genes) > 0) {
+    plots <- FeaturePlot(merged, features = valid_genes, split.by = "condition")
+    plots <- lapply(plots, function(p) p + theme(title = element_text(size = 10)))
+    combined_plot <- wrap_plots(plots) + plot_annotation(title = pathway)
+    
+    tryCatch({
+    ggsave(filename = here("results", genes_out, paste0(pathway, "_condition.png")), plot = combined_plot, width = 12, height = 8, dpi = 300)
+    })
+    
+  } else {
+    message(paste("No valid genes found for:", pathway))
+  }
+}
+  
+```
+
+
+Use violin plot and break into either condition or cell types
+
+```{r}
+split_column <- "condition"
+
+for (pathway in names(pathways)) {
+  genes <- pathways[[pathway]]
+  valid_genes <- genes[genes %in% rownames(merged)]
+  
+  if (length(valid_genes) > 0) {
+    plots <- VlnPlot(
+      merged,
+      features = valid_genes,
+      split.by = split_column,
+      pt.size = 0,
+      combine = FALSE
+    )
+    
+    plots <- lapply(plots, function(p) {
+      p + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    })
+    
+    combined_plot <- wrap_plots(plots) + plot_annotation(title = paste0(pathway, " (split by ", split_column, ")"))
+    
+      ggsave(
+        filename = here("results", genes_out, paste0(pathway, "_violin_split.png")),
+        plot = combined_plot, 
+        width = 14, 
+        height = length(valid_genes)*2,  # adjust height per number of plots
+        dpi = 300
+      )
+      message(paste("Saved:", pathway, "split violin plot"))
+
+  } else {
+    message(paste("No valid genes found for:", pathway))
+  }
+}
+```
+
+
+
+```{r}
+for (pathway in names(pathways)) {
+  genes <- pathways[[pathway]]
+  valid_genes <- genes[genes %in% rownames(merged)]
+  
+  if (length(valid_genes) > 0) {
+    plots <- VlnPlot(
+      merged,
+      features = valid_genes,
+      group.by = "condition",
+      pt.size = 0,
+      combine = FALSE
+    )
+    
+    plots <- lapply(plots, function(p) {
+      p + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    })
+    
+    combined_plot <- wrap_plots(plots) + plot_annotation(title = paste0(pathway, " (split by ", split_column, ")"))
+    
+      ggsave(
+        filename = here("results", genes_out, paste0(pathway, "_violin_condition.png")),
+        plot = combined_plot, 
+        width = 14, 
+        height = length(valid_genes)*2,  # adjust height per number of plots
+        dpi = 300
+      )
+      message(paste("Saved:", pathway, "split violin plot"))
+
+  } else {
+    message(paste("No valid genes found for:", pathway))
+  }
+}
+
+```
+
+
+
+# Score pathways Using UCell
+
+```{r}
+merged <- AddModuleScore_UCell(merged, features = pathways)
+```
+
+
+```{r}
+colnames(merged@meta.data)[grepl("_UCell$", colnames(merged@meta.data))]
+```
+
+```{r}
+signature.names <- paste0(names(pathways), "_UCell")
+signature.names
+```
+
+# No apprent difference on the signatures of interet on the pool of cells
+
+```{r}
+p <- VlnPlot(
+  merged,
+  features = signature.names,
+  group.by = "condition",
+  pt.size = 0
+)
+
+# Reduce title font size and x-axis text size
+p <- p + theme(
+  strip.text = element_text(size = 4),          # Smaller facet titles
+  axis.text.x = element_text(size = 8, angle = 0, hjust = 0.5),
+  axis.text.y = element_text(size = 8)
+)
+
+# Auto-adjust plot height and width
+#n_features <- length(signature.names)
+#plot_width <- 4 + 2 * (n_features >= 3)          # Scales width modestly with number of features
+#plot_height <- max(4, n_features * 1.5)          # Height scales per number of violins
+
+# Save the plot
+ggsave(
+  filename = here("results", pathways_out, "pathways_vlnplot_condition.png"),
+  plot = p,
+  width = 8,
+  height = 12,
+  dpi = 300
+)
+```
+
+
+```{r}
+p
+```
+
+
+```{r}
+p <- VlnPlot(merged, features = signature.names, group.by = "sample", pt.size = 0)
+ggsave(here("results", pathways_out,"pathways_vlnplot_sample.png"), 
+       plot = p, 
+       width = 8, 
+       height = 12, 
+       dpi = 300)
+p
+```
+
+
+# subset cells of interest and apply the above
+```{r}
+# if has performed AddModuleScore function on the obj once, need to remove them before perform on the sub-obj
+merged <- readRDS(here("results", "final.rds"))
+```
+
+
+```{r}
+# Loop over each cell type
+
+celltypes <- unique(merged$refined_cell_type)
+
+for (ct in celltypes) {
+  message("Processing cell type: ", ct)
+
+  # Subset Seurat object by cell type
+  subset_obj <- subset(merged, subset = refined_cell_type == ct)
+
+  # Skip if too few cells
+  if (ncol(subset_obj) < 50) {
+    message("  Skipped: too few cells.")
+    next
+  }
+
+  # Score pathway activity
+  subset_obj <- AddModuleScore_UCell(subset_obj, features = pathways)
+  signature.names <- paste0(names(pathways), "_UCell")
+  # Create violin plot
+  p <- VlnPlot(subset_obj, features = signature.names, group.by = "condition", pt.size = 0, ncol = 3)
+
+  # Create output folder
+  output_dir <- here("results", pathways_out, ct)
+  dir_create(output_dir)
+
+  # Save plot
+  plot_file <- file.path(output_dir, "pathways_vlnplot_condition.png")
+  ggsave(plot_file, plot = p, 
+         width = 12, 
+         height = 12, 
+         dpi = 300)
+}
+```
+# Plot the expression before smoothing UCell scores
+
+```{r}
+for (ct in celltypes) {
+  message("Processing cell type: ", ct)
+
+  # Subset Seurat object by cell type
+  subset_obj <- subset(merged, subset = refined_cell_type == ct)
+
+  # Skip if too few cells
+  if (ncol(subset_obj) < 50) {
+    message("  Skipped: too few cells.")
+    next
+  }
+
+  # Score pathway activity
+  subset_obj <- AddModuleScore_UCell(subset_obj, features = pathways)
+  signature.names <- paste0(names(pathways), "_UCell")
+  
+  # Create output folder
+  output_dir <- here("results", pathways_out, ct)
+  dir_create(output_dir)
+  
+  # Determine number of panels (each feature × split)
+  n_features <- length(signature.names)
+  n_panels <- n_features * 2  # 2 panels per feature if split by condition
+  ncol_plot <- 3
+  nrow_plot <- ceiling(n_panels / ncol_plot)
+  
+  # Adjust width and height (e.g., 4x4 inches per panel)
+  plot_width <- ncol_plot * 4
+  plot_height <- nrow_plot * 4
+  
+  # Generate FeaturePlot
+  p <- FeaturePlot(
+    subset_obj,
+    features = signature.names,
+    split.by = "condition",
+    pt.size = 0,
+    ncol = ncol_plot
+  )
+  
+  # Save the plot
+  ggsave(
+    filename = file.path(output_dir, "pathways_featurePlot_condition.png"),
+    plot = p,
+    width = plot_width,
+    height = plot_height,
+    dpi = 300
+  )
+}
+
+```
+key marker: Acta2 in the contractile signaling and Junb in the AP-1 signaling
+
+```{r}
+features = c("Acta2", "Junb")
+VlnPlot(merged, features = "Junb", split.by = "condition")
+VlnPlot(merged, features = "Acta2", split.by = "condition")
+```
+
+
+# AP-1 signal 
+upregulated in endothelial-1, -2, fibroblast-1
+downregulated in urotheilium, smooth muscle, and transitional cells
+
+Contractile signal is down in endothial-1 and -2, transitional cells, and all urothelium cells
+
+
+apply wilcoxon test 
+
+✅ Step-by-Step: Statistical Testing of UCell Scores
+
+
+```{r}
+
+```
+

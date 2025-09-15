@@ -1,0 +1,115 @@
+```{r}
+library(devtools)
+install_github("arc85/singleseqgset")
+library(singleseqgset)
+```
+
+
+```{r}
+library(msigdbr)
+```
+
+```{r}
+install.packages("heatmap3")
+library(heatmap3)
+```
+# Download gene sests of interest using msigdbr
+
+```{r}
+# Get Hallmark gene sets for mouse
+h.mouse <- msigdbr(species = "Mus musculus", category = "H")
+
+# Get unique hallmark names
+h.names <- unique(h.mouse$gs_name)
+
+# Build gene set list
+h.sets <- vector("list", length = length(h.names))
+names(h.sets) <- h.names
+```
+```{r}
+library(dplyr)
+for (i in seq_along(h.sets)) {
+  set_name <- h.names[i]
+  h.sets[[i]] <- h.mouse %>%
+    filter(gs_name == set_name) %>%
+    pull(gene_symbol)
+}
+```
+
+
+```{r}
+custom.sets <- list(
+  "AP1_signaling" = c("Jun", "Junb", "Jund", "Fos", "Fosb", "Fosl1", "Fosl2"),
+  "Contractile_Protein" = c("Acta2", "Myocd", "Tagln", "Cald1", "Cnn1", "Des", "Vcl", "Myh11", "Smtn")
+)
+
+all.sets <- c(h.sets, custom.sets)
+
+```
+
+
+```{r}
+merged <- readRDS(here("results", "final.rds"))
+merged
+```
+```{r}
+expr.mat <- GetAssayData(merged, slot = "data")
+logfc.data <- logFC(cluster.ids=merged@meta.data$sample, expr.mat=expr.mat)
+names(logfc.data)
+```
+
+```{r}
+gse.res <- wmw_gsea(expr.mat=expr.mat, 
+                    cluster.cells=logfc.data[[1]],
+                    log.fc.cluster=logfc.data[[2]], 
+                    gene.sets=all.sets)
+```
+
+```{r}
+res.stats <- gse.res[["GSEA_statistics"]]
+res.pvals <- gse.res[["GSEA_p_values"]]
+res.pvals <- apply(res.pvals,2,p.adjust,method="fdr") #Correct for multiple comparisons
+res.stats[order(res.stats[,1],decreasing=TRUE)[1:10],] #Top gene sets enriched by z scores
+```
+```{r}
+res.pvals[order(res.stats[,1],decreasing=TRUE)[1:10],] #Top gene sets by p values
+```
+
+```{r}
+#Plot the z scores with heatmap3
+heatmap3(res.stats,Colv=NA,cexRow=0.5,cexCol=1,scale="row")
+```
+```{r}
+# Save to PDF
+pdf(here("results", "heatmap3_res.stats.pdf"), width = 13, height = 10)
+heatmap3(res.stats, Colv = NA, cexRow = 0.5, cexCol = 1, scale = "row")
+dev.off()
+
+```
+
+# re-generate for KO and WT
+
+```{r}
+logfc.data <- logFC(cluster.ids=merged@meta.data$condition, expr.mat=expr.mat)
+
+gse.res <- wmw_gsea(expr.mat=expr.mat, 
+                    cluster.cells=logfc.data[[1]],
+                    log.fc.cluster=logfc.data[[2]], 
+                    gene.sets=all.sets)
+
+res.stats <- gse.res[["GSEA_statistics"]]
+res.pvals <- gse.res[["GSEA_p_values"]]
+res.pvals <- apply(res.pvals,2,p.adjust,method="fdr") #Correct for multiple comparisons
+res.stats[order(res.stats[,1],decreasing=TRUE)[1:10],] #Top gene sets enriched by z scores
+
+res.pvals[order(res.stats[,1],decreasing=TRUE)[1:10],] #Top gene sets by p values
+```
+
+```{r}
+# Save to PDF
+pdf(here("results", "heatmap3_res_KOvsWT.stats.pdf"), width = 13, height = 10)
+heatmap3(res.stats, Colv = NA, cexRow = 0.5, cexCol = 1, scale = "row")
+dev.off()
+```
+
+# Subset cell types

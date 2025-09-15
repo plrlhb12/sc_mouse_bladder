@@ -1,0 +1,437 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-04-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# This is executed in GCP VM rstudio server
+
+```{r}
+# install.packages("remotes")
+# remotes::install_github("carmonalab/UCell")
+```
+
+```{r}
+library(Seurat)
+library(here)
+library(UCell)
+library(dplyr)
+library(ggplot2)
+library(fs) # for dir_create()
+library(patchwork) #for wrap figs
+
+```
+
+```{r}
+set.seed(123)
+```
+
+
+
+
+# load the object
+
+```{r}
+merged <- readRDS(here("results", "final.rds"))
+```
+
+# create new output folder
+
+```{r}
+pathways_out <- "explore_pathways_output_20250616"
+dir.create(here("results", pathways_out))
+
+genes_out <- "explore_genes_output_20250616"
+feature_p <- "feature_plot"
+violin_p <- "violin_plot"
+
+for (subfolder in c(feature_p, violin_p)){
+  dir.create(here("results", genes_out, subfolder))
+}
+```
+
+
+# create more subfolders
+
+```{r}
+
+```
+
+# explore the marker expression of the pathways of interest using FeaturePlot and VlnPlot
+
+Focus on smooth muscle cells, compare KO to WT
+
+```{r}
+
+pathways <- list(
+  "Bladder_Development" = c("Shh", "Gata3", "Bmp4", "Tbx18", "Tbx2", "Pax2", "Foxa1", "Hoxa11", "Hoxd13"),
+  "HDACs" = c("Hdac1", "Hdac2", "Hdac3", "Hdac4", "Hdac5", 
+              "Hdac6", "Hdac7", "Hdac8", "Hdac9", "Hdac10", "Hdac11"),
+  "HATs" = c("Kat2a", "Kat2b", "Kat5", "Kat6a", "Kat6b", "Kat7", "Kat8"),
+  "FGF_Pathway" = c("Fgf2", "Fgf10", "Fgfr1", "Fgfr2", "Fgfr3", "Fgfr4"),
+  "Hedgehog_Signaling" = c("Shh", "Ihh", "Ptch1", "Smo", "Gli1", "Gli2"),
+  "Hippo_YAP_Pathway" = c("Yap1", "Wwtr1", "Tead1", "Tead2", "Tead3", "Tead4"),
+  "Pax_Genes" = c("Pax2", "Pax3", "Pax8"),
+  "Hox_Genes" = c("Hoxa1", "Hoxb4", "Hoxd13"),
+  "Sox_Genes" = c("Sox2", "Sox9", "Sox17"),
+  "Fox_Genes" = c("Foxa2", "Foxc1", "Foxd1"),
+  "NOS_Genes" = c("Nos1", "Nos2", "Nos3")
+)
+
+```
+
+
+# explore the expression of the genes of interest individually
+# first using Feature plot
+
+```{r}
+for (pathway in names(pathways)) {
+  genes <- pathways[[pathway]]
+  valid_genes <- genes[genes %in% rownames(merged)]
+  
+  if (length(valid_genes) > 0) {
+    plots <- FeaturePlot(merged, features = valid_genes, combine = FALSE)
+    plots <- lapply(plots, function(p) p + theme(title = element_text(size = 10)))
+    combined_plot <- wrap_plots(plots) + plot_annotation(title = pathway)
+    
+    tryCatch({
+    ggsave(filename = here("results", genes_out, feature_p, paste0(pathway, ".png")), plot = combined_plot, width = 12, height = 8, dpi = 300)
+    })
+    
+  } else {
+    message(paste("No valid genes found for:", pathway))
+  }
+}
+  
+
+```
+
+# plot their expression according to condition
+# Pax2 doesn' express
+
+```{r}
+for (pathway in names(pathways)) {
+  genes <- pathways[[pathway]]
+  valid_genes <- genes[genes %in% rownames(merged)]
+  
+  if (length(valid_genes) > 0) {
+    plots <- FeaturePlot(merged, features = valid_genes, split.by = "condition")
+    plots <- lapply(plots, function(p) p + theme(title = element_text(size = 10)))
+    combined_plot <- wrap_plots(plots) + plot_annotation(title = pathway)
+    
+    tryCatch({
+    ggsave(filename = here("results", genes_out, feature_p, paste0(pathway, "_condition.png")), plot = combined_plot, width = 12, height = 8, dpi = 300)
+    })
+    
+  } else {
+    message(paste("No valid genes found for:", pathway))
+  }
+}
+  
+```
+
+
+Use violin plot and break into KO/WT condition per cell type
+
+```{r}
+split_column <- "condition"
+subfolder <- here("results", genes_out, violin_p, paste0("perCelltype_by", split_column))
+dir.create(subfolder)
+    
+for (pathway in names(pathways)) {
+  genes <- pathways[[pathway]]
+  valid_genes <- genes[genes %in% rownames(merged)]
+  
+  if (length(valid_genes) > 0) {
+    plots <- VlnPlot(
+      merged,
+      features = valid_genes,
+      split.by = split_column, # here still grouped by cell types but then split further by condition
+      pt.size = 0,
+      combine = FALSE
+    )
+    
+    plots <- lapply(plots, function(p) {
+      p + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    })
+    
+    combined_plot <- wrap_plots(plots) + plot_annotation(title = paste0(pathway, " (split by ", split_column, ")"))
+  
+      ggsave(
+        filename = here(subfolder, paste0(pathway, "_violin_celltype_by_", split_column, ".png")),
+        plot = combined_plot, 
+        width = 14, 
+        height = length(valid_genes)*2,  # adjust height per number of plots
+        dpi = 300
+      )
+      message(paste("Saved:", pathway, "split violin plot"))
+
+  } else {
+    message(paste("No valid genes found for:", pathway))
+  }
+}
+```
+
+# violin plot per condition for the whole cell pools
+usually no big difference between conditions overall
+
+```{r}
+subfolder2 <- here("results", genes_out, violin_p, "overall_by_condition")
+dir.create(subfolder2)
+
+for (pathway in names(pathways)) {
+  genes <- pathways[[pathway]]
+  valid_genes <- genes[genes %in% rownames(merged)]
+  
+  if (length(valid_genes) > 0) {
+    plots <- VlnPlot(
+      merged,
+      features = valid_genes,
+      group.by = "condition", # change the grouping of cell type to condition
+      pt.size = 0,
+      combine = FALSE
+    )
+    
+    plots <- lapply(plots, function(p) {
+      p + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    })
+    
+    combined_plot <- wrap_plots(plots) + plot_annotation(title = paste0(pathway, " (split by condition) "))
+    
+      ggsave(
+        filename = here(subfolder2, paste0(pathway, "_violin_overall_by_condition.png")),
+        plot = combined_plot, 
+        width = 14, 
+        height = length(valid_genes)*2,  # adjust height per number of plots
+        dpi = 300
+      )
+      message(paste("Saved:", pathway, "split violin plot"))
+
+  } else {
+    message(paste("No valid genes found for:", pathway))
+  }
+}
+
+```
+
+
+######################################
+# Score pathways Using UCell and plot the expession scores
+
+```{r}
+merged <- AddModuleScore_UCell(merged, features = pathways)
+```
+
+
+```{r}
+colnames(merged@meta.data)[grepl("_UCell$", colnames(merged@meta.data))]
+```
+
+```{r}
+signature.names <- paste0(names(pathways), "_UCell")
+signature.names
+```
+
+# No apprent difference on the signatures of interest on the pool of cells
+
+```{r}
+p <- VlnPlot(
+  merged,
+  features = signature.names,
+  group.by = "condition",
+  pt.size = 0
+)
+
+# Reduce title font size and x-axis text size
+p <- p + theme(
+  strip.text = element_text(size = 4),          # Smaller facet titles
+  axis.text.x = element_text(size = 8, angle = 0, hjust = 0.5),
+  axis.text.y = element_text(size = 8)
+)
+
+# Auto-adjust plot height and width
+#n_features <- length(signature.names)
+#plot_width <- 4 + 2 * (n_features >= 3)          # Scales width modestly with number of features
+#plot_height <- max(4, n_features * 1.5)          # Height scales per number of violins
+
+# Save the plot
+ggsave(
+  filename = here("results", pathways_out, "pathways_vlnplot_condition.png"),
+  plot = p,
+  width = 8,
+  height = 12,
+  dpi = 300
+)
+```
+
+
+```{r}
+p
+```
+
+
+# not executed this time
+```{r}
+p <- VlnPlot(merged, features = signature.names, group.by = "sample", pt.size = 0)
+ggsave(here("results", pathways_out,"pathways_vlnplot_sample.png"), 
+       plot = p, 
+       width = 8, 
+       height = 12, 
+       dpi = 300)
+p
+```
+
+
+####################
+# subset cells of interest and apply the above UCscore
+```{r}
+# if has performed AddModuleScore function on the obj once, need to remove them before perform on the sub-obj
+merged <- readRDS(here("results", "final.rds"))
+```
+
+
+# Plot the expression before smoothing UCell scores using violin plot
+
+```{r}
+# Loop over each cell type
+
+celltypes <- unique(merged$refined_cell_type)
+
+for (ct in celltypes) {
+  message("Processing cell type: ", ct)
+
+  # Subset Seurat object by cell type
+  subset_obj <- subset(merged, subset = refined_cell_type == ct)
+
+  # Skip if too few cells
+  if (ncol(subset_obj) < 50) {
+    message("  Skipped: too few cells.")
+    next
+  }
+
+  # Score pathway activity
+  subset_obj <- AddModuleScore_UCell(subset_obj, features = pathways)
+  signature.names <- paste0(names(pathways), "_UCell")
+  # Create violin plot
+  p <- VlnPlot(subset_obj, features = signature.names, group.by = "condition", pt.size = 0, ncol = 3)
+
+  # Create output folder
+  output_dir <- here("results", pathways_out, ct)
+  dir_create(output_dir)
+
+  # Save plot
+  plot_file <- file.path(output_dir, "pathways_vlnplot_condition.png")
+  ggsave(plot_file, plot = p, 
+         width = 12, 
+         height = 12, 
+         dpi = 300)
+}
+```
+
+# Plot the expression using feature plot
+didn't perform since feature plots are usally not as good as violin plot
+
+```{r}
+for (ct in celltypes) {
+  message("Processing cell type: ", ct)
+
+  # Subset Seurat object by cell type
+  subset_obj <- subset(merged, subset = refined_cell_type == ct)
+
+  # Skip if too few cells
+  if (ncol(subset_obj) < 50) {
+    message("  Skipped: too few cells.")
+    next
+  }
+
+  # Score pathway activity
+  subset_obj <- AddModuleScore_UCell(subset_obj, features = pathways)
+  signature.names <- paste0(names(pathways), "_UCell")
+  
+  # Create output folder
+  output_dir <- here("results", pathways_out, ct)
+  dir_create(output_dir)
+  
+  # Determine number of panels (each feature × split)
+  n_features <- length(signature.names)
+  n_panels <- n_features * 2  # 2 panels per feature if split by condition
+  ncol_plot <- 3
+  nrow_plot <- ceiling(n_panels / ncol_plot)
+  
+  # Adjust width and height (e.g., 4x4 inches per panel)
+  plot_width <- ncol_plot * 4
+  plot_height <- nrow_plot * 4
+  
+  # Generate FeaturePlot
+  p <- FeaturePlot(
+    subset_obj,
+    features = signature.names,
+    split.by = "condition",
+    pt.size = 0,
+    ncol = ncol_plot
+  )
+  
+  # Save the plot
+  ggsave(
+    filename = file.path(output_dir, "pathways_featurePlot_condition.png"),
+    plot = p,
+    width = plot_width,
+    height = plot_height,
+    dpi = 300
+  )
+}
+
+```
+
+
+
+apply wilcoxon test: not exeuted yet
+
+✅ Step-by-Step: Statistical Testing of UCell Scores
+
+
+# take a closer look at immune cells. 
+
+# calculate the cell number
+
+```{r}
+table(merged$refined_cell_type)
+```
+
+```{r}
+lymphoid <- subset(merged, subset = refined_cell_type == "Immune_Lymphoid")
+```
+
+```{r}
+table(lymphoid$condition)
+```
+
+
+```{r}
+myeloid <- subset(merged, subset = refined_cell_type == "Immune_Myeloid")
+table(myeloid$condition)
+```
+
+
+# check the cell numbers among cell types
+```{r}
+for (ct in merged$refined_cell_type)
+```
+
+
+```{r}
+unique(merged@meta.data$refined_cell_type)
+```
+```{r}
+table(merged@meta.data$refined_cell_type, merged@meta.data$condition)
+```
+```{r}
+cell_counts <- as.data.frame(table(merged@meta.data$refined_cell_type, merged@meta.data$condition))
+cell_counts
+```
+

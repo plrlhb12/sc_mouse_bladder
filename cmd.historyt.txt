@@ -1,0 +1,267 @@
+    1  sudo apt update
+    2  sudo apt upgrade -y
+    3  sudo apt install -y r-base
+    4  cat /etc/os-release 
+    5  sudo apt install --no-install-recommends software-properties-common dirmngr
+    6  wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc | sudo tee -a /etc/apt/trusted.gpg.d/cran_ubuntu_key.asc
+    7  sudo add-apt-repository "deb https://cloud.r-project.org/bin/linux/ubuntu $(lsb_release -cs)-cran40/"
+    8  sudo apt install --no-install-recommends r-base
+    9  sudo apt-get install gdebi-core
+   10  wget https://download2.rstudio.org/server/focal/amd64/rstudio-server-2024.12.1-563-amd64.deb
+   11  sudo gdebi rstudio-server-2024.12.1-563-amd64.deb
+   12  sudo systemctl status rstudio-server
+   13  sudo systemctl start rstudio-server
+   14  sudo systemctl status rstudio-server
+   15  sudo nanp /etc/rstudio/rserver.conf
+   16  sudo nano /etc/rstudio/rserver.conf
+   17  less /etc/rstudio/rserver.conf
+   18  sudo systemctl restart rstudio-server
+   19  curl http://localhost:8787
+   20  sudo journalctl -u rstudio-server
+   21  sudo passwd lirongp
+   22  exit
+   23  pwd
+   24  df -h
+   25  gsutil ls gs://h11-sc-bucket
+   26  git clone https://github.com/plrlhb12/sc_mouse_bladder.git
+   27  ls -lth
+   28  cd sc_mouse_bladder/
+   29  ls -lth
+   30  ls notebooks/
+   31  ls scripts/
+   32  mkdir -p data results
+   33  ls -lth
+   34  less .gitignore 
+   35  vim .gitignore 
+   36  less .gitignore 
+   37  git log
+   38  git add .
+   39  git commit -m "modify .gitignore to keep empty data and results folder"
+   40  git config --global user.email "lrpeng@hotmail.com"
+   41  git config --global user.name "plrlhb12"
+   42  git commit -m "modify .gitignore to keep empty data and results folder"
+   43  git push
+   44  ls ~/.ssh/id_rsa.pub
+   45  touch ~/.ssh/id_rsa.pub
+   46  ssh-keygen -t ed25519 -C "your_email@example.com"
+   47  ssh-keygen -t ed25519 -C "lrpeng@hotmail.com"
+   48  cat ~/.ssh/id_rsa.pub
+   49  cat /home/lirongp/.ssh/id_ed25519.pub
+   50  ssh -T git@github.com
+   51  git push
+   52  git add remote origin 
+   53  git remote -v
+   54  git push
+   55  git remote set-url origin git@github.com:plrlhb12/sc_mouse_bladder.git
+   56  git push
+   57  gsutil cp gs://your-bucket-name/yourfile.fastq.gz /home/lirongp/
+   58  gsutil cp gs://h11-sc-bucket/* data/
+   59  gsutil cp -r gs://h11-sc-bucket/* data/
+   60  ls data/*
+   61  ls -lth
+   62  touch notebooks/gcp_vm_setup.md
+   63  history
+   64  history >> notebooks/gcp_vm_setup.md 
+   65  less notebooks/gcp_vm_setup.md 
+   66  git add .
+   67  git commit -m "add gcp_vm_setup.md"
+   68  git push
+   69  exit
+   70  history
+   71  systemctl start rstudio-server
+   72  sudo -l
+   73  sudo systemctl start rstudio-server
+   74  conda env list
+   75  wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+   76  bash Miniconda3-latest-Linux-x86_64.sh
+   77  conda env list
+   78  source ~/.bashrc
+   79  conda env list
+   80  conda install -n base -c conda-forge mamba
+   81  mamba create -n r4.3.3seurat   -c conda-forge -c bioconda   r-base=4.3.3   r-tidyverse   r-devtools   r-hdf5r   r-igraph   bioconductor-tfbstools   bioconductor-dirichletmultinomial   leidenalg   numpy
+   82  df -h
+   83  conda clean --all -y
+   84  df -h
+   85  mamba create -n r4.3.3seurat   -c conda-forge -c bioconda   r-base=4.3.3   r-tidyverse   r-devtools   r-hdf5r   r-igraph   bioconductor-tfbstools   bioconductor-dirichletmultinomial   leidenalg   numpy
+   86  df -h
+   87  exit
+   88  sudo resize2fs /dev/sda1
+   89  df -h
+   90  conda env list
+   91  conda activate r4.3.3seurat
+   92  conda env export --no-builds > r-env-new.yml
+   93  ls -lth
+   94  rm r-env-new.yml 
+   95  conda env export --no-builds > r4.3.3seurat.yml
+   96  less r4.3.3seurat.yml 
+   97  which R
+   98  cat .Renviron
+   99  cat ~/.Renviron
+  100  mamba create -n r-env-4.4   -c conda-forge -c bioconda   r-base=4.4.3   r-tidyverse   r-devtools   r-hdf5r   r-igraph   bioconductor-tfbstools   bioconductor-dirichletmultinomial   leidenalg   numpy
+  101  conda deactivate
+  102  mamba create -n r-env-4.4   -c conda-forge -c bioconda   r-base=4.4.3   r-tidyverse   r-devtools   r-hdf5r   r-igraph   bioconductor-tfbstools   bioconductor-dirichletmultinomial   leidenalg   numpy
+  103  mamba create -n r-env-4.4   -c conda-forge -c bioconda   r-base=4.4.3   r-tidyverse   r-devtools
+  104  ls -lth
+  105  less r4.3.3seurat.yml 
+  106  conda activate r4.3.3seurat
+  107  touch r4.3.3seurat_environment.yml
+  108  vim r4.3.3seurat_environment.yml 
+  109  which R
+  110  touch ~/.Renviron
+  111  vim ~/.Renviron
+  112  sudo systemctl status rstudio-server
+  113  sudo systemctl stop rstudio-server
+  114  sudo systemctl restart rstudio-server
+  115  sudo systemctl status rstudio-server
+  116  conda activate r4.3.3seurat
+  117  sudo systemctl start rstudio-server
+  118  systemctl status rstudio-server
+  119  less ~/.Renviron
+  120  ls R_HOME=/home/lirongp/miniconda3/envs/r4.3.3seurat/bin/R
+  121  which R
+  122  ls /home/lirongp/miniconda3/envs/r4.3.3seurat/bin/R
+  123  ls /home/lirongp/miniconda3/envs/r4.3.3seurat/bin/R/*
+  124  /home/lirongp/miniconda3/envs/r4.3.3seurat/bin/R --version
+  125  nano ~/.Renviron 
+  126  less ~/.Renviron 
+  127  sudo nano /etc/rstudio/rserver.conf
+  128  sudo systemctl restart rstudio-server
+  129  cat /etc/rstudio/rserver.conf
+  130  /home/lirongp/miniconda3/envs/r4.3.3seurat/bin/R
+  131  sudo tail -n 50 /var/log/rstudio-server/rserver.log
+  132  sudo journalctl -u rstudio-server -n 50
+  133  ls /home/lirongp/miniconda3/envs/r4.3.3seurat/lib/R/lib/libR.so
+  134  history
+  135  cat /etc/rstudio/rserver.conf
+  136  vim /etc/rstudio/rserver.conf
+  137  sudo nano /etc/rstudio/rserver.conf
+  138  sudo systemctl restart rstudio-server
+  139  sudo apt-get update && sudo apt-get install -y   libcurl4-openssl-dev   libssl-dev   libxml2-dev   libharfbuzz-dev   libfribidi-dev   libpng-dev   libcairo2-dev   libfontconfig1-dev   libtiff5-dev   libjpeg-dev   libgl1-mesa-dev   libglu1-mesa-dev   libgdal-dev
+  140  sudo apt-get update && sudo apt-get install -y libgsl-dev
+  141  history
+  142  nano ~/.Renviron
+  143  sudo systemctl restart rstudio-server
+  144  sudo systemctl status rstudio-server
+  145  sudo passwd lirongp
+  146  history
+  147  gsutil ls gs://h11-sc-bucket
+  148  ls -lth
+  149  cd sc_mouse_bladder/
+  150  ls -lth
+  151  ls data/
+  152  ls results/
+  153  gsutil cp gs://h11-sc-bucket/final.rds results/
+  154  git log
+  155  git branch
+  156  git status
+  157  ls -lth
+  158  ls -lth notebooks/
+  159  git diff --name-status origin/main
+  160  git diff origin/main
+  161  git log
+  162  ls -lth
+  163  cd sc_mouse_bladder/
+  164  git diff origin/main
+  165  git diff --name-status origin/main
+  166  ls -lth
+  167  git log
+  168  git status
+  169  ls renv/
+  170  less .Rprofile 
+  171  git log
+  172  git status
+  173  git fetch origin
+  174  git log HEAD..origin/main --oneline
+  175  git pull origin main
+  176  git status
+  177  git add .Rprofile
+  178  git add renv.lock
+  179  ls .Rproj.user/
+  180  ls .Rproj.user/B2315E22/
+  181  vim .gitignore 
+  182  ls -lth
+  183  ls notebooks/
+  184  git add 20250331-setup-gcp-vm-rstudio-server-4..4.3.Rmd 
+  185  git branch
+  186  ls notebooks/legacy/
+  187  history
+  188  git log
+  189  git push
+  190  git commit -m "add 20250331-setup-gcp-vm-rstudio-server-4..4.3.Rmd and modify ignorefile"
+  191  git push
+  192  ls -lth
+  193  rm -r  20250305-removeDoublets-score-Cellcycle_files
+  194  mv 20250305-removeDoublets-score-Cellcycle.Rmd notebooks/
+  195  ls scripts/
+  196  ls -lth
+  197  mv 20250331-setup-gcp-vm-rstudio-server-4..4.3.Rmd notebooks/
+  198  ls -lth
+  199  git add .
+  200  git commit -m "remove doubletfinder generated chunk files"
+  201  git log
+  202  git push
+  203  sudo systemctl restart rstudio-server
+  204  history
+  205  gsutil ls gs://h11-sc-bucket
+  206  ls
+  207  cd sc_mouse_bladder/
+  208  gsutil -m cp -r results/explore_pathways_output gs://h11-sc-bucket/
+  209  gcloud auth login
+  210  gsutil -m cp -r results/explore_pathways_output gs://h11-sc-bucket/
+  211  sudo systemctl restart rstudio-server
+  212  sudo systemctl status rstudio-server
+  213  ls -lth
+  214  cd sc_mouse_bladder/
+  215  ls -lth
+  216  cd results/
+  217  ls -lth
+  218  cd explore_genes_output/
+  219  ls -lth
+  220  mkdir violin_plot
+  221  mv *violin* violin_plot/
+  222  ls -lth
+  223  mkdir feature_plot
+  224  mv *png feature_plot/
+  225  ls -lth
+  226  cd violin_plot/
+  227  ls
+  228  mkdir by_cellTypes
+  229  mdkir by_condition
+  230  mkdir by_condition
+  231  ls -lth
+  232  mv *split* by_cellTypes/
+  233  ls
+  234  mv *.png by_condition/
+  235  ls -lth
+  236  cd ../../
+  237  ls -lth
+  238  ls explore_pathways_output/
+  239  history
+  240  history | grep 'gsutil'
+  241  gsutil -m cp -r explore_pathways_output gs://h11-sc-bucket/signature_output
+  242  gsutil -m cp -r explore_genes_output gs://h11-sc-bucket/genes_output
+  243  history | grep "sudo"
+  244  sudo systemctl restart rstudio-server
+  245  cd sc_mouse_bladder/results/
+  246  gsutil -m cp -r *pdf gs://h11-sc-bucket/
+  247  history
+  248  sudo systemctl restart rstudio-server
+  249  sudo systemctl status rstudio-server
+  250  ls -lth
+  251  cd sc_mouse_bladder/
+  252  ls
+  253  cd results/
+  254  ls -lth
+  255  history
+  256  gsutil -m cp -r explore_genes_output_20250616 gs://h11-sc-bucket/genes_output_20250623
+  257  gsutil -m cp -r explore_pathways__output_20250616 gs://h11-sc-bucket/pathways_output_20250623
+  258  gsutil -m cp -r explore_pathways_output_20250616 gs://h11-sc-bucket/pathways_output_20250623
+  259  ls -lth
+  260  du -sh
+  261  cd sc_mouse_bladder/
+  262  ls -lth
+  263  ls results/
+  264  ls scripts/
+  265  ls notebooks/
+  266  history
+  267  history > cmd.historyt.txt
